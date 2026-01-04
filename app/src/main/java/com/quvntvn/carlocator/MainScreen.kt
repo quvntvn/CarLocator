@@ -2,17 +2,15 @@ package com.quvntvn.carlocator
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -37,13 +34,12 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- COULEURS PERSONNALISÉES (Thème Tech/Néon) ---
+// Couleurs
 val NeonBlue = Color(0xFF2979FF)
 val DeepBlack = Color(0xFF121212)
 val SurfaceBlack = Color(0xFF1E1E1E)
@@ -54,18 +50,29 @@ val TextGrey = Color(0xFFAAAAAA)
 fun MainScreen(db: AppDatabase) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prefs = remember { PrefsManager(context) }
 
     // États
-    var showBluetoothDialog by remember { mutableStateOf(false) }
-    val carLocationState by db.carDao().getCarLocation().collectAsState(initial = null)
+    var showGarageDialog by remember { mutableStateOf(false) }
 
-    // Caméra de la carte
+    // On récupère la LISTE des voitures
+    val allCars by db.carDao().getAllCars().collectAsState(initial = emptyList())
+
+    // Voiture sélectionnée pour l'affichage (par défaut la première qui a une position, ou null)
+    var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
+
+    // Mise à jour de la sélection auto si une seule voiture change
+    LaunchedEffect(allCars) {
+        if (selectedCar == null && allCars.isNotEmpty()) {
+            selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
+        }
+    }
+
+    // Caméra
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(48.8566, 2.3522), 15f)
     }
 
-    // --- Permissions (Le code robuste d'avant) ---
+    // Permissions
     var hasPermission by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -74,182 +81,168 @@ fun MainScreen(db: AppDatabase) {
     LaunchedEffect(Unit) {
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            perms.add(Manifest.permission.BLUETOOTH_CONNECT)
-            perms.add(Manifest.permission.BLUETOOTH_SCAN)
+            perms.add(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
         }
         permissionLauncher.launch(perms.toTypedArray())
     }
 
-    // Centrer sur la voiture au démarrage
-    LaunchedEffect(carLocationState) {
-        carLocationState?.let { loc ->
-            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16f))
+    // Centrer sur la voiture sélectionnée
+    LaunchedEffect(selectedCar) {
+        selectedCar?.let { car ->
+            if (car.latitude != null && car.longitude != null) {
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(car.latitude, car.longitude), 16f))
+            }
         }
     }
 
-    // --- UI PRINCIPALE ---
     Box(modifier = Modifier.fillMaxSize().background(DeepBlack)) {
 
-        // 1. LA CARTE (Plein écran fond)
+        // 1. LA CARTE
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(
-                isMyLocationEnabled = hasPermission,
-                // Le paramètre isZoomControlsEnabled a également été déplacé
-                // Il est maintenant redondant car déjà dans uiSettings
-            ),
-            uiSettings = MapUiSettings(
-                zoomControlsEnabled = false,
-                mapToolbarEnabled = false // <-- PARAMÈTRE CORRIGÉ ET AU BON ENDROIT
-            )
+            properties = MapProperties(isMyLocationEnabled = hasPermission, isMapToolbarEnabled = false, isZoomControlsEnabled = false),
+            uiSettings = MapUiSettings(zoomControlsEnabled = false)
         ) {
-
-            carLocationState?.let { loc ->
-                Marker(
-                    state = MarkerState(position = LatLng(loc.latitude, loc.longitude)),
-                    title = "Ma Voiture",
-                    snippet = "Garée le ${formatDate(loc.timestamp)}"
-                )
+            // Afficher un marqueur pour CHAQUE voiture garée
+            allCars.forEach { car ->
+                if (car.latitude != null && car.longitude != null) {
+                    Marker(
+                        state = MarkerState(position = LatLng(car.latitude, car.longitude)),
+                        title = car.name,
+                        snippet = "Garée le ${formatDate(car.timestamp)}",
+                        onClick = {
+                            selectedCar = car
+                            false
+                        }
+                    )
+                }
             }
         }
 
-        // 2. BARRE D'ÉTAT FLOTTANTE (Haut)
+        // 2. BARRE D'ÉTAT (GARAGE)
         TopStatusCard(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp, start = 16.dp, end = 16.dp),
-            isCarSaved = prefs.getCarDeviceId() != null,
-            onSettingsClick = { showBluetoothDialog = true }
+            carCount = allCars.size,
+            onGarageClick = { showGarageDialog = true }
         )
 
-        // 3. PANNEAU DE CONTRÔLE (Bas)
+        // 3. PANNEAU INFO VOITURE
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
-                .fillMaxWidth()
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).fillMaxWidth()
         ) {
-            // Bouton de recentrage (flottant au dessus du panneau)
+            // Bouton Recentrer GPS
             SmallFloatingButton(
                 icon = Icons.Rounded.MyLocation,
                 onClick = {
                     if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        // On essaie de recentrer sur l'utilisateur (action par défaut du bouton myLocation Google)
-                        // Ici on met juste une action simple pour l'UI
-                        Toast.makeText(context, "Recentrage...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Localisation...", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.align(Alignment.End).padding(bottom = 16.dp)
             )
 
-            // Carte d'info principale
+            // Carte Info
             CarInfoCard(
-                carLocation = carLocationState,
-                onParkClick = { saveCurrentLocation(context, db, scope) },
-                onFindClick = {
-                    scope.launch {
-                        carLocationState?.let {
-                            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 17f))
+                car = selectedCar,
+                onParkClick = {
+                    // Pour garer manuellement, il faut choisir QUELLE voiture on gare si on en a plusieurs
+                    // Pour simplifier ici : on gare la voiture sélectionnée, ou on demande d'en créer une
+                    if (selectedCar == null) {
+                        Toast.makeText(context, "Ajoutez d'abord une voiture !", Toast.LENGTH_SHORT).show()
+                        showGarageDialog = true
+                    } else {
+                        saveCurrentLocation(context, db, scope, selectedCar!!)
+                    }
+                },
+                onNavigateClick = {
+                    selectedCar?.let { car ->
+                        if (car.latitude != null && car.longitude != null) {
+                            val gmmIntentUri = Uri.parse("google.navigation:q=${car.latitude},${car.longitude}")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                            mapIntent.setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(mapIntent)
+                            } catch (e: Exception) {
+                                // Fallback si Maps n'est pas installé
+                                context.startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
+                            }
                         }
                     }
                 }
             )
         }
 
-        // 4. DIALOGUE BLUETOOTH (Si ouvert)
-        if (showBluetoothDialog) {
-            BluetoothDeviceList(
-                onDeviceSelected = { mac ->
-                    prefs.saveCarDeviceId(mac)
-                    showBluetoothDialog = false
-                    Toast.makeText(context, "Voiture liée !", Toast.LENGTH_SHORT).show()
+        // 4. DIALOGUE GARAGE
+        if (showGarageDialog) {
+            GarageDialog(
+                savedCars = allCars,
+                onAddCar = { mac, name ->
+                    scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) }
                 },
-                onDismiss = { showBluetoothDialog = false }
+                onDeleteCar = { car ->
+                    scope.launch { db.carDao().deleteCar(car) }
+                },
+                onDismiss = { showGarageDialog = false }
             )
         }
     }
 }
 
-// --- COMPOSANTS UI CUSTOM ---
-
 @Composable
-fun TopStatusCard(modifier: Modifier = Modifier, isCarSaved: Boolean, onSettingsClick: () -> Unit) {
+fun TopStatusCard(modifier: Modifier = Modifier, carCount: Int, onGarageClick: () -> Unit) {
     Surface(
         modifier = modifier.shadow(8.dp, CircleShape).clip(CircleShape),
         color = SurfaceBlack.copy(alpha = 0.9f),
         contentColor = TextWhite
     ) {
         Row(
-            modifier = Modifier
-                .clickable { onSettingsClick() }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.clickable { onGarageClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Indicateur (Point vert ou rouge)
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(if (isCarSaved) Color(0xFF00E676) else Color.Red)
-            )
+            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(if (carCount > 0) Color(0xFF00E676) else Color.Red))
             Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Text(
-                    text = if (isCarSaved) "Bluetooth Monitor" else "Configuration requise",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextGrey
-                )
-                Text(
-                    text = if (isCarSaved) "Surveillance active" else "Sélectionner voiture",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Mon Garage", style = MaterialTheme.typography.labelSmall, color = TextGrey)
+                Text(if (carCount > 0) "$carCount voiture(s)" else "Aucune voiture", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = TextWhite)
+            Icon(Icons.Rounded.DirectionsCar, null, tint = TextWhite)
         }
     }
 }
 
 @Composable
-fun CarInfoCard(
-    carLocation: CarLocation?,
-    onParkClick: () -> Unit,
-    onFindClick: () -> Unit
-) {
+fun CarInfoCard(car: CarLocation?, onParkClick: () -> Unit, onNavigateClick: () -> Unit) {
     Surface(
         modifier = Modifier.shadow(16.dp, RoundedCornerShape(24.dp)),
         shape = RoundedCornerShape(24.dp),
         color = SurfaceBlack
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
-            // Titre
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.DirectionsCar, null, tint = NeonBlue, modifier = Modifier.size(28.dp))
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Ma Voiture", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(car?.name ?: "Sélectionnez une voiture", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Info Adresse / Date
-            if (carLocation != null) {
+            if (car?.latitude != null) {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.Place, null, tint = TextGrey, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text("Position enregistrée", color = TextGrey, fontSize = 12.sp)
-                        Text(formatDate(carLocation.timestamp), color = TextWhite, fontSize = 16.sp)
+                        Text("Dernière position connue", color = TextGrey, fontSize = 12.sp)
+                        Text(formatDate(car.timestamp), color = TextWhite, fontSize = 16.sp)
                     }
                 }
             } else {
-                Text("Aucune position enregistrée.", color = TextGrey, fontSize = 14.sp)
+                Text("Position inconnue ou non garée.", color = TextGrey, fontSize = 14.sp)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Boutons d'action
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Bouton PARKER (Gauche)
                 Button(
                     onClick = onParkClick,
                     modifier = Modifier.weight(1f).height(56.dp),
@@ -257,22 +250,21 @@ fun CarInfoCard(
                     shape = RoundedCornerShape(16.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
                 ) {
-                    Text("📍 Garer ici", color = TextWhite)
+                    Text("📍 Garer Ici", color = TextWhite)
                 }
-
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // Bouton TROUVER (Droit - Coloré)
+                // BOUTON NAVIGATION
                 Button(
-                    onClick = onFindClick,
+                    onClick = onNavigateClick,
                     modifier = Modifier.weight(1f).height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
                     shape = RoundedCornerShape(16.dp),
-                    enabled = carLocation != null
+                    enabled = car?.latitude != null
                 ) {
-                    Icon(Icons.Rounded.Navigation, null)
+                    Icon(Icons.Rounded.NearMe, null) // Icône navigation
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Trouver")
+                    Text("Y Aller")
                 }
             }
         }
@@ -282,18 +274,21 @@ fun CarInfoCard(
 @Composable
 fun SmallFloatingButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier.size(48.dp),
-        containerColor = SurfaceBlack,
-        contentColor = TextWhite,
-        shape = CircleShape
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-    }
+        onClick = onClick, modifier = modifier.size(48.dp),
+        containerColor = SurfaceBlack, contentColor = TextWhite, shape = CircleShape
+    ) { Icon(icon, null, modifier = Modifier.size(20.dp)) }
 }
 
-// Fonction utilitaire pour la date
-fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("dd MMM à HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
+fun formatDate(timestamp: Long): String = SimpleDateFormat("dd MMM à HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+fun saveCurrentLocation(context: Context, db: AppDatabase, scope: kotlinx.coroutines.CoroutineScope, car: CarLocation) {
+    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+    LocationServices.getFusedLocationProviderClient(context).lastLocation.addOnSuccessListener { location: Location? ->
+        if (location != null) {
+            scope.launch {
+                db.carDao().insertOrUpdateCar(car.copy(latitude = location.latitude, longitude = location.longitude, timestamp = System.currentTimeMillis()))
+                Toast.makeText(context, "${car.name} garée !", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 }

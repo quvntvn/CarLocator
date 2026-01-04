@@ -14,51 +14,47 @@ import kotlinx.coroutines.launch
 
 class CarDisconnectReceiver : BroadcastReceiver() {
 
-    @SuppressLint("MissingPermission") // On suppose que les perms sont déjà là
+    @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
-        // 1. On vérifie si l'événement est bien une déconnexion
         if (intent.action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
-
-            // 2. Quel appareil s'est déconnecté ?
             val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             val disconnectedMac = device?.address
 
-            // 3. Est-ce que c'est NOTRE voiture ?
-            val prefs = PrefsManager(context)
-            val myCarMac = prefs.getCarDeviceId()
-
-            if (disconnectedMac != null && disconnectedMac == myCarMac) {
-                Log.d("CarLocator", "🚗 La voiture s'est déconnectée ! Enregistrement...")
-
-                // 4. On lance l'enregistrement de la position GPS
-                saveLocation(context)
+            if (disconnectedMac != null) {
+                // On vérifie en base de données si ce MAC correspond à une de nos voitures
+                saveLocationIfCarExists(context, disconnectedMac)
             }
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun saveLocation(context: Context) {
-        // On utilise LocationServices pour choper la dernière position connue rapidement
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    private fun saveLocationIfCarExists(context: Context, macAddress: String) {
+        val db = AppDatabase.getDatabase(context)
+        val scope = CoroutineScope(Dispatchers.IO)
 
-        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            if (location != null) {
-                // On doit lancer une coroutine car la DB ne peut pas être touchée sur le thread principal
-                val db = AppDatabase.getDatabase(context)
-                val scope = CoroutineScope(Dispatchers.IO)
+        scope.launch {
+            // 1. Est-ce que cette voiture est dans notre garage ?
+            val car = db.carDao().getCarByMac(macAddress)
 
-                scope.launch {
-                    db.carDao().saveCarLocation(
-                        CarLocation(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                    Log.d("CarLocator", "✅ Position sauvegardée automatiquement : ${location.latitude}, ${location.longitude}")
+            if (car != null) {
+                Log.d("CarLocator", "🚗 ${car.name} vient de se déconnecter ! Recherche GPS...")
+
+                // 2. On récupère la position GPS
+                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        scope.launch {
+                            // 3. On met à jour SEULEMENT la position et l'heure, en gardant le nom
+                            val updatedCar = car.copy(
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                                timestamp = System.currentTimeMillis()
+                            )
+                            db.carDao().insertOrUpdateCar(updatedCar)
+                            Log.d("CarLocator", "✅ Position de ${car.name} mise à jour !")
+                        }
+                    }
                 }
-            } else {
-                Log.e("CarLocator", "❌ Impossible de trouver la position GPS au moment de la déconnexion")
             }
         }
     }

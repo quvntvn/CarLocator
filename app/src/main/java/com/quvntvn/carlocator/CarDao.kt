@@ -1,6 +1,7 @@
 package com.quvntvn.carlocator
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -8,15 +9,19 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CarDao {
-    // Récupère la position (Flow permet d'être notifié en temps réel si ça change)
-    @Query("SELECT * FROM car_location WHERE id = 1")
-    fun getCarLocation(): Flow<CarLocation?>
+    // Récupère toutes les voitures enregistrées
+    @Query("SELECT * FROM car_location")
+    fun getAllCars(): Flow<List<CarLocation>>
 
-    // Sauvegarde ou remplace la position existante
+    // Récupère une voiture spécifique par son MAC (utile pour le Receiver)
+    @Query("SELECT * FROM car_location WHERE macAddress = :mac LIMIT 1")
+    suspend fun getCarByMac(mac: String): CarLocation?
+
+    // Sauvegarde ou met à jour une voiture (Nom ou Position)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveCarLocation(location: CarLocation)
+    suspend fun insertOrUpdateCar(car: CarLocation)
 
-    // Supprime la position (si on veut reset)
-    @Query("DELETE FROM car_location")
-    suspend fun clearLocation()
+    // Supprime une voiture
+    @Delete
+    suspend fun deleteCar(car: CarLocation)
 }
