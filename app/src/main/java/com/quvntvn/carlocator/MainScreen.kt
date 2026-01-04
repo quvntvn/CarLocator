@@ -57,10 +57,10 @@ fun MainScreen(db: AppDatabase) {
     // On récupère la LISTE des voitures
     val allCars by db.carDao().getAllCars().collectAsState(initial = emptyList())
 
-    // Voiture sélectionnée pour l'affichage (par défaut la première qui a une position, ou null)
+    // Voiture sélectionnée pour l'affichage
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
 
-    // Mise à jour de la sélection auto si une seule voiture change
+    // Mise à jour de la sélection auto
     LaunchedEffect(allCars) {
         if (selectedCar == null && allCars.isNotEmpty()) {
             selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
@@ -80,8 +80,10 @@ fun MainScreen(db: AppDatabase) {
 
     LaunchedEffect(Unit) {
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        // CORRECTION 1 : Ajout correct des permissions Bluetooth
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            perms.add(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+            perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+            perms.add(Manifest.permission.BLUETOOTH_SCAN)
         }
         permissionLauncher.launch(perms.toTypedArray())
     }
@@ -101,8 +103,12 @@ fun MainScreen(db: AppDatabase) {
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = hasPermission, isMapToolbarEnabled = false, isZoomControlsEnabled = false),
-            uiSettings = MapUiSettings(zoomControlsEnabled = false)
+            // CORRECTION 2 : Paramètres UI déplacés au bon endroit
+            properties = MapProperties(isMyLocationEnabled = hasPermission),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                mapToolbarEnabled = false
+            )
         ) {
             // Afficher un marqueur pour CHAQUE voiture garée
             allCars.forEach { car ->
@@ -146,8 +152,6 @@ fun MainScreen(db: AppDatabase) {
             CarInfoCard(
                 car = selectedCar,
                 onParkClick = {
-                    // Pour garer manuellement, il faut choisir QUELLE voiture on gare si on en a plusieurs
-                    // Pour simplifier ici : on gare la voiture sélectionnée, ou on demande d'en créer une
                     if (selectedCar == null) {
                         Toast.makeText(context, "Ajoutez d'abord une voiture !", Toast.LENGTH_SHORT).show()
                         showGarageDialog = true
@@ -262,7 +266,7 @@ fun CarInfoCard(car: CarLocation?, onParkClick: () -> Unit, onNavigateClick: () 
                     shape = RoundedCornerShape(16.dp),
                     enabled = car?.latitude != null
                 ) {
-                    Icon(Icons.Rounded.NearMe, null) // Icône navigation
+                    Icon(Icons.Rounded.NearMe, null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Y Aller")
                 }

@@ -5,9 +5,9 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "car_location")
 data class CarLocation(
-    @PrimaryKey val macAddress: String, // L'ID unique est maintenant l'adresse MAC
-    val name: String, // Le nom personnalisé (ex: "Clio", "BMW")
-    val latitude: Double? = null, // Null = pas encore garée
+    @PrimaryKey val macAddress: String, // ID est devenu macAddress
+    val name: String,
+    val latitude: Double? = null,
     val longitude: Double? = null,
     val timestamp: Long = 0
 )

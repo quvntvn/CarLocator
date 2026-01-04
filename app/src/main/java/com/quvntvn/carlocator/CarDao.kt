@@ -13,10 +13,6 @@ interface CarDao {
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
 
-    // Récupère une voiture spécifique par son MAC (utile pour le Receiver)
-    @Query("SELECT * FROM car_location WHERE macAddress = :mac LIMIT 1")
-    suspend fun getCarByMac(mac: String): CarLocation?
-
     // Sauvegarde ou met à jour une voiture (Nom ou Position)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateCar(car: CarLocation)
