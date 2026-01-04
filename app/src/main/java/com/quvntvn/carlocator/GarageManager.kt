@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +15,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DirectionsCar
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +28,10 @@ import androidx.compose.ui.window.Dialog
 @Composable
 fun GarageDialog(
     savedCars: List<CarLocation>,
-    onAddCar: (String, String) -> Unit, // mac, name
+    currentSelectedCar: CarLocation?, // Pour savoir laquelle surligner
+    onAddCar: (String, String) -> Unit,
     onDeleteCar: (CarLocation) -> Unit,
+    onCarSelect: (CarLocation) -> Unit, // <--- NOUVEAU : Action quand on clique
     onDismiss: () -> Unit
 ) {
     var showAddMode by remember { mutableStateOf(false) }
@@ -50,7 +52,6 @@ fun GarageDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (showAddMode) {
-                    // Mode Ajout : Liste des appareils Bluetooth à proximité
                     BluetoothPicker(
                         onDevicePicked = { mac, defaultName ->
                             onAddCar(mac, defaultName)
@@ -59,7 +60,6 @@ fun GarageDialog(
                         onCancel = { showAddMode = false }
                     )
                 } else {
-                    // Mode Liste : Voitures enregistrées
                     if (savedCars.isEmpty()) {
                         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Text("Aucune voiture. Ajoutes-en une !", color = Color.Gray)
@@ -67,7 +67,12 @@ fun GarageDialog(
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f)) {
                             items(savedCars) { car ->
-                                SavedCarItem(car, onDelete = { onDeleteCar(car) })
+                                SavedCarItem(
+                                    car = car,
+                                    isSelected = car.macAddress == currentSelectedCar?.macAddress, // On vérifie si c'est la voiture active
+                                    onClick = { onCarSelect(car) },
+                                    onDelete = { onDeleteCar(car) }
+                                )
                             }
                         }
                     }
@@ -96,12 +101,10 @@ fun BluetoothPicker(onDevicePicked: (String, String) -> Unit, onCancel: () -> Un
     val adapter = bluetoothManager.adapter
     val pairedDevices = remember { adapter?.bondedDevices?.toList() ?: emptyList() }
 
-    // État pour le dialogue de nommage
     var selectedMac by remember { mutableStateOf<String?>(null) }
     var tempName by remember { mutableStateOf("") }
 
     if (selectedMac != null) {
-        // Petit sous-dialogue pour donner un nom
         AlertDialog(
             onDismissRequest = { selectedMac = null },
             title = { Text("Nom de la voiture") },
@@ -129,20 +132,30 @@ fun BluetoothPicker(onDevicePicked: (String, String) -> Unit, onCancel: () -> Un
 }
 
 @Composable
-fun SavedCarItem(car: CarLocation, onDelete: () -> Unit) {
+fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+    // Couleur de fond : Gris clair si sélectionnée, gris foncé sinon
+    val backgroundColor = if (isSelected) Color(0xFF2979FF).copy(alpha = 0.2f) else Color(0xFF2C2C2C)
+    val borderColor = if (isSelected) Color(0xFF2979FF) else Color.Transparent
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .background(Color(0xFF2C2C2C), RoundedCornerShape(12.dp))
+            .padding(vertical = 4.dp)
+            .background(backgroundColor, RoundedCornerShape(12.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .clickable { onClick() } // <--- C'est ici que la magie opère !
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Rounded.DirectionsCar, null, tint = Color.White)
+        Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) Color(0xFF2979FF) else Color.White)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(car.name, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(if(car.latitude != null) "Garée récemment" else "Pas de position", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(
+                text = if(car.latitude != null) "Garée le ${formatDate(car.timestamp)}" else "Pas de position",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Rounded.Delete, null, tint = Color(0xFFFF5252))

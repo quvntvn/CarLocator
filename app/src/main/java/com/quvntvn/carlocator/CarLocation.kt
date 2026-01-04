@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "car_location")
 data class CarLocation(
-    @PrimaryKey val macAddress: String, // ID est devenu macAddress
+    @PrimaryKey val macAddress: String,
     val name: String,
     val latitude: Double? = null,
     val longitude: Double? = null,

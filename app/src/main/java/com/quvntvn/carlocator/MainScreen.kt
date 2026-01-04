@@ -181,11 +181,27 @@ fun MainScreen(db: AppDatabase) {
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,
+                currentSelectedCar = selectedCar, // On passe la voiture actuelle
                 onAddCar = { mac, name ->
-                    scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) }
+                    scope.launch {
+                        val newCar = CarLocation(macAddress = mac, name = name)
+                        db.carDao().insertOrUpdateCar(newCar)
+                        selectedCar = newCar // On sélectionne directement la nouvelle voiture
+                    }
                 },
                 onDeleteCar = { car ->
-                    scope.launch { db.carDao().deleteCar(car) }
+                    scope.launch {
+                        db.carDao().deleteCar(car)
+                        // Si on supprime la voiture qu'on regardait, on remet selectedCar à null
+                        if (selectedCar?.macAddress == car.macAddress) {
+                            selectedCar = null
+                        }
+                    }
+                },
+                onCarSelect = { car ->
+                    selectedCar = car // ✅ On change la voiture sélectionnée
+                    showGarageDialog = false // On ferme le menu
+                    Toast.makeText(context, "${car.name} sélectionnée", Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = { showGarageDialog = false }
             )
