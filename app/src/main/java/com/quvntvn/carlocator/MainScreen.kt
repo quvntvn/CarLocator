@@ -96,12 +96,15 @@ fun MainScreen(db: AppDatabase) {
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
                 isMyLocationEnabled = hasPermission,
-                // On cache les boutons par défaut moches de Google
-                isMapToolbarEnabled = false,
-                isZoomControlsEnabled = false
+                // Le paramètre isZoomControlsEnabled a également été déplacé
+                // Il est maintenant redondant car déjà dans uiSettings
             ),
-            uiSettings = MapUiSettings(zoomControlsEnabled = false)
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                mapToolbarEnabled = false // <-- PARAMÈTRE CORRIGÉ ET AU BON ENDROIT
+            )
         ) {
+
             carLocationState?.let { loc ->
                 Marker(
                     state = MarkerState(position = LatLng(loc.latitude, loc.longitude)),
