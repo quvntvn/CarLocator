@@ -36,10 +36,11 @@
             </intent-filter>
         </activity>
         <receiver
-            android:name=".CarDisconnectReceiver"
+            android:name=".CarBluetoothReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
             </intent-filter>
         </receiver>

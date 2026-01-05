@@ -20,4 +20,8 @@ interface CarDao {
 
     @Delete
     suspend fun deleteCar(car: CarLocation)
+
+    // Dans CarDao.kt, ajoute cette ligne :
+    @Query("SELECT * FROM car_location")
+    suspend fun getAllCarsList(): List<CarLocation>
 }

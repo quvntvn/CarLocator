@@ -2,16 +2,17 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt")
+    // REMPLACE "kotlin-kapt" PAR :
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.quvntvn.carlocator"
-    compileSdk = 35 // On met 35 (Android 15) pour être stable
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.quvntvn.carlocator"
-        minSdk = 28 // Android 9 (Pie) minimum
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -45,35 +46,27 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
 
-    // Tests
+    // Room (Base de données)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    // REMPLACE "kapt" PAR "ksp" ICI :
+    ksp(libs.androidx.room.compiler)
+
+    // Maps & GPS
+    implementation(libs.play.services.location)
+    implementation(libs.google.maps.compose)
+    implementation(libs.play.services.maps)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-
-    // --- NOS AJOUTS ---
-
-    // Icônes étendues (Bluetooth, GPS...)
-    implementation("androidx.compose.material:material-icons-extended:1.7.6")
-
-    // Google Maps
-    implementation("com.google.maps.android:maps-compose:4.3.3")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-
-    // Localisation
-    implementation("com.google.android.gms:play-services-location:21.2.0")
-
-    // Base de données (Room)
-    val room_version = "2.6.1"
-    implementation("androidx.room:room-runtime:$room_version")
-    implementation("androidx.room:room-ktx:$room_version")
-    kapt("androidx.room:room-compiler:$room_version")
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
 }
