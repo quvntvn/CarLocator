@@ -28,8 +28,8 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version = "21.3.0" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 google-maps-compose = { group = "com.google.maps.android", name = "maps-compose", version = "4.4.1" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version = "19.0.0" }
 

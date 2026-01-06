@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+
     // Maps & GPS
     implementation(libs.play.services.location)
     implementation(libs.google.maps.compose)
