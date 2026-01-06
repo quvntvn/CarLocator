@@ -10,6 +10,8 @@ activityCompose = "1.9.3"
 composeBom = "2024.04.01"
 room = "2.6.1"
 ksp = "2.0.21-1.0.25"
+materialIconsExtended = "1.6.7"
+annotation = "1.8.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +31,8 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version = "21.3.0" }
+androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 google-maps-compose = { group = "com.google.maps.android", name = "maps-compose", version = "4.4.1" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version = "19.0.0" }

@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-01-03T16:03:45.982810700Z">
+        <DropdownSelection timestamp="2026-01-06T16:34:16.807908200Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=b51e300c" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Hulku\.android\avd\Medium_Phone_API_34.avd" />
             </handle>
           </Target>
         </DropdownSelection>
