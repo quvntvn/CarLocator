@@ -85,10 +85,12 @@ class CarBluetoothReceiver : BroadcastReceiver() {
     }
 
     private fun sendNotification(context: Context, title: String, content: String, notifId: Int, showAction: Boolean = false) {
-        val channelId = "car_locator_channel"
+        val channelId = "car_locator_channel_v2" // Changement d'ID pour forcer la mise à jour des paramètres
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Statut Voiture", NotificationManager.IMPORTANCE_HIGH)
+            // IMPORTANCE_DEFAULT = Son/Vibre mais pas de pop-up intrusif sur l'écran actif
+            // (IMPORTANCE_HIGH faisait le pop-up)
+            val channel = NotificationChannel(channelId, "Statut Voiture", NotificationManager.IMPORTANCE_DEFAULT)
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
@@ -102,7 +104,8 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle(title)
             .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Priorité standard (pas haute)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // Affiche le contenu sur l'écran verrouillé
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
@@ -115,4 +118,6 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             NotificationManagerCompat.from(context).notify(notifId, builder.build())
         }
     }
+
+
 }
