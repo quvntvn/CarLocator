@@ -86,12 +86,28 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
+    var showBackgroundLocationRationale by remember { mutableStateOf(false) }
+
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startBackgroundService()
+        } else {
+            Toast.makeText(context, "L'accès à la position en arrière-plan est requis.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val locationGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true
         if (locationGranted) {
-            startBackgroundService()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                showBackgroundLocationRationale = true
+            } else {
+                startBackgroundService()
+            }
         }
     }
 
@@ -111,7 +127,11 @@ fun MainScreen(db: AppDatabase) {
         }
 
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startBackgroundService()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                showBackgroundLocationRationale = true
+            } else {
+                startBackgroundService()
+            }
         } else {
             permissionLauncher.launch(perms.toTypedArray())
         }
@@ -263,6 +283,28 @@ fun MainScreen(db: AppDatabase) {
                 prefsManager.setFirstLaunchDone()
                 showTutorialDialog = false
             })
+        }
+
+        if (showBackgroundLocationRationale) {
+            AlertDialog(
+                onDismissRequest = { showBackgroundLocationRationale = false },
+                containerColor = DarkerSurface,
+                title = { Text("Permission Requise", color = TextWhite) },
+                text = { Text("Pour fonctionner correctement, l'application a besoin de l'autorisation d'accéder à votre position en arrière-plan.", color = TextGrey) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showBackgroundLocationRationale = false
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)
+                    ) {
+                        Text("Compris", color = TextWhite)
+                    }
+                }
+            )
         }
     }
 }

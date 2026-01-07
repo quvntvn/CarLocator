@@ -18,6 +18,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,7 +57,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                                 Log.d("CarLocator", "🔴 Déconnecté de ${car.name}. Recherche GPS...")
                                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                                fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token).addOnSuccessListener { location: Location? ->
                                     if (location != null) {
                                         scope.launch {
                                             val updatedCar = car.copy(
