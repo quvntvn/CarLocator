@@ -1,9 +1,10 @@
 package com.quvntvn.carlocator
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.Intent // You need to add this import
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,17 +15,18 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp // You need to add this import
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import android.bluetooth.BluetoothDevice // You need to add this import
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
 // --- DIALOGUE GARAGE (Ajout/Suppression) ---
 @Composable
@@ -57,7 +59,9 @@ fun GarageDialog(
                     if (!isBtEnabled) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp)
                         ) {
                             // Icon(Icons.Rounded.BluetoothDisabled, null, modifier = Modifier.size(48.dp)) // This Icon doesn't exist by default
                             Spacer(modifier = Modifier.height(12.dp))
@@ -193,18 +197,25 @@ fun isBluetoothEnabled(context: Context): Boolean {
     return manager.adapter?.isEnabled == true
 }
 
-// You need to define this function, for example:
 @SuppressLint("MissingPermission")
 fun getBondedDevices(context: Context): List<BluetoothDevice> {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     return bluetoothManager.adapter?.bondedDevices?.toList() ?: emptyList()
 }
 
-// You also need to define the CarLocation data class, for example:
-data class CarLocation(val macAddress: String, val name: String)
+// ↓↓↓↓↓↓ FIX IS HERE: Added @Entity and @PrimaryKey annotations to CarLocation ↓↓↓↓↓↓
+@Entity(tableName = "car_locations")
+data class CarLocation(
+    @PrimaryKey
+    val macAddress: String,
+    val name: String
+    // You might want to add other fields like latitude, longitude, timestamp here as well
+    // val latitude: Double? = null,
+    // val longitude: Double? = null,
+    // val timestamp: Long = 0L
+)
 
 
-// ↓↓↓↓↓↓ FIX IS HERE: Renamed this function from GarageDialog to BluetoothPicker ↓↓↓↓↓↓
 @SuppressLint("MissingPermission")
 @Composable
 fun BluetoothPicker(onDevicePicked: (String, String) -> Unit, onCancel: () -> Unit) {
