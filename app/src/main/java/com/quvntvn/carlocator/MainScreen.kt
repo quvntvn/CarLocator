@@ -250,9 +250,9 @@ fun MainScreen(db: AppDatabase) {
             GarageDialog(
                 savedCars = allCars,
                 currentSelectedCar = selectedCar,
-                onAddCar = { mac, name -> scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) } },
-                onDeleteCar = { car -> scope.launch { db.carDao().deleteCar(car); if (selectedCar == car) selectedCar = null } },
-                onCarSelect = { car -> selectedCar = car; showGarageDialog = false },
+                onAddCar = { mac: String, name: String -> scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) } },
+                onDeleteCar = { car: CarLocation -> scope.launch { db.carDao().deleteCar(car); if (selectedCar == car) selectedCar = null } },
+                onCarSelect = { car: CarLocation -> selectedCar = car; showGarageDialog = false },
                 onDismiss = { showGarageDialog = false }
             )
         }
@@ -397,111 +397,4 @@ fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: 
     }
     adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
     adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
-}
-
-// --- DIALOGUE GARAGE (Ajout/Suppression) ---
-@Composable
-fun GarageDialog(
-    savedCars: List<CarLocation>,
-    currentSelectedCar: CarLocation?,
-    onAddCar: (String, String) -> Unit,
-    onDeleteCar: (CarLocation) -> Unit,
-    onCarSelect: (CarLocation) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var showAddScreen by remember { mutableStateOf(false) }
-    var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
-    val context = LocalContext.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = DarkerSurface,
-        title = {
-            Text(if (showAddScreen) "Ajouter une voiture" else "Mon Garage", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        },
-        text = {
-            if (showAddScreen) {
-                Column {
-                    // MESSAGE AJOUTÉ ICI : Avertissement Bluetooth
-                    Text(
-                        "⚠️ Le Bluetooth doit être activé pour détecter votre voiture.",
-                        color = TextGrey,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    if (scannedDevices.isEmpty()) {
-                        Text("Recherche d'appareils Bluetooth...", color = NeonBlue, fontSize = 14.sp)
-                    } else {
-                        LazyColumn(modifier = Modifier.height(200.dp)) {
-                            items(scannedDevices) { device ->
-                                @SuppressLint("MissingPermission")
-                                val name = device.name ?: device.address
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onAddCar(device.address, name)
-                                            showAddScreen = false
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Rounded.Bluetooth, null, tint = TextGrey)
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(name, color = TextWhite, fontSize = 16.sp)
-                                }
-                                Divider(color = SurfaceBlack)
-                            }
-                        }
-                    }
-                }
-                LaunchedEffect(Unit) {
-                    scannedDevices = getBondedDevices(context)
-                }
-            } else {
-                LazyColumn(modifier = Modifier.height(200.dp)) {
-                    items(savedCars) { car ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onCarSelect(car) }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val isSelected = currentSelectedCar?.macAddress == car.macAddress
-                                Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextGrey)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(car.name, color = if (isSelected) NeonBlue else TextWhite, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                            }
-                            IconButton(onClick = { onDeleteCar(car) }) {
-                                Icon(Icons.Rounded.Delete, null, tint = ErrorRed)
-                            }
-                        }
-                        Divider(color = SurfaceBlack)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (!showAddScreen) {
-                Button(onClick = { showAddScreen = true }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) {
-                    Text("Ajouter", color = TextWhite)
-                }
-            }
-        },
-        dismissButton = {
-            Button(onClick = { if (showAddScreen) showAddScreen = false else onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
-                Text(if (showAddScreen) "Retour" else "Fermer", color = TextGrey)
-            }
-        }
-    )
-}
-
-@SuppressLint("MissingPermission")
-fun getBondedDevices(context: Context): List<BluetoothDevice> {
-    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    return manager.adapter?.bondedDevices?.toList() ?: emptyList()
 }
