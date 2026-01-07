@@ -41,67 +41,83 @@ class CarBluetoothReceiver : BroadcastReceiver() {
 
             scope.launch {
                 try {
-                    // On cherche si c'est une de nos voitures
-                    // Astuce : on vérifie les deux cas (MAC majuscule/minuscule) pour être sûr
-                    val allCars = db.carDao().getAllCarsList() // Il faudra ajouter cette méthode dans CarDao (voir étape suivante)
+                    val allCars = db.carDao().getAllCarsList()
                     val car = allCars.find { it.macAddress.equals(device.address, ignoreCase = true) }
 
                     if (car != null) {
-                        if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
-                            // CAS 1 : CONNEXION -> Juste une notif "Connecté"
-                            Log.d("CarLocator", "🟢 Connecté à ${car.name}")
-                            sendNotification(context, "Voiture Connectée 🟢", "Connecté à ${car.name}", car.macAddress.hashCode())
-                        }
-                        else if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
-                            // CAS 2 : DÉCONNEXION -> GPS + Notif
-                            Log.d("CarLocator", "🔴 Déconnecté de ${car.name}. Recherche GPS...")
-
-                            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-                                if (location != null) {
-                                    scope.launch {
-                                        val updatedCar = car.copy(
-                                            latitude = location.latitude,
-                                            longitude = location.longitude,
-                                            timestamp = System.currentTimeMillis()
-                                        )
-                                        db.carDao().insertOrUpdateCar(updatedCar)
-                                        sendNotification(context, "Voiture Garée 📍", "Position de ${car.name} enregistrée.", car.macAddress.hashCode(), true)
+                        when (action) {
+                            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                                Log.d("CarLocator", "🟢 Connecté à ${car.name}")
+                                sendNotification(context, "Voiture Connectée 🟢", "Connecté à ${car.name}", car.macAddress.hashCode())
+                                pendingResult.finish()
+                            }
+                            BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                                Log.d("CarLocator", "🔴 Déconnecté de ${car.name}. Recherche GPS...")
+                                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                                fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                                    if (location != null) {
+                                        scope.launch {
+                                            val updatedCar = car.copy(
+                                                latitude = location.latitude,
+                                                longitude = location.longitude,
+                                                timestamp = System.currentTimeMillis()
+                                            )
+                                            db.carDao().insertOrUpdateCar(updatedCar)
+                                            sendNotification(context, "Voiture Garée 📍", "Position de ${car.name} enregistrée.", car.macAddress.hashCode(), true)
+                                            pendingResult.finish()
+                                        }
+                                    } else {
                                         pendingResult.finish()
                                     }
-                                } else {
+                                }.addOnFailureListener { e ->
+                                    Log.e("CarLocator", "Erreur de localisation: ${e.message}")
                                     pendingResult.finish()
                                 }
-                            }.addOnFailureListener { pendingResult.finish() }
-                            return@launch // On attend le GPS, donc on ne finish() pas tout de suite ici
+                            }
+                            else -> pendingResult.finish()
                         }
+                    } else {
+                        pendingResult.finish()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    pendingResult.finish()
                 }
-                pendingResult.finish()
             }
         }
     }
 
-    private fun sendNotification(context: Context, title: String, content: String, notifId: Int, showAction: Boolean = false) {
-        val channelId = "car_locator_channel_v2" // Changement d'ID pour forcer la mise à jour des paramètres
+    @SuppressLint("MissingPermission")
+    fun checkInitialConnectionState(context: Context, cars: List<CarLocation>) {
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val adapter = bluetoothManager.adapter
+        if (adapter == null || !adapter.isEnabled) return
 
+        val connectedDevices = adapter.bondedDevices
+        for (device in connectedDevices) {
+            val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
+            if (car != null) {
+                // If a car is found among bonded (and likely connected) devices,
+                // consider it connected.
+                Log.d("CarLocator", "Vérification initiale: ${car.name} est déjà connecté.")
+                // Optionally send a notification or update UI state here
+            }
+        }
+    }
+    private fun sendNotification(context: Context, title: String, content: String, notifId: Int, showAction: Boolean = false) {
+        val channelId = "car_locator_channel_v2"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // IMPORTANCE_DEFAULT = Son/Vibre mais pas de pop-up intrusif sur l'écran actif
-            // (IMPORTANCE_HIGH faisait le pop-up)
             val channel = NotificationChannel(channelId, "Statut Voiture", NotificationManager.IMPORTANCE_DEFAULT)
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
+        val intent = Intent(context, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(content)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Priorité standard (pas haute)
