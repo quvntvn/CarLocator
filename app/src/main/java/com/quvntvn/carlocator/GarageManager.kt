@@ -154,7 +154,7 @@ fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onD
         Column(modifier = Modifier.weight(1f)) {
             Text(car.name, fontWeight = FontWeight.Bold, color = Color.White)
             Text(
-                text = if(car.latitude != null) "Garée le ${formatDate(car.timestamp)}" else "Pas de position",
+                text = if(car.latitude != null) "Garée le ${formatCarTimestamp(car.timestamp)}" else "Pas de position", // <-- Changed function call
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
@@ -165,4 +165,4 @@ fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onD
     }
 }
 
-fun formatDate(timestamp: Long): String = SimpleDateFormat("dd MMM à HH:mm", Locale.getDefault()).format(Date(timestamp))
+fun formatCarTimestamp(timestamp: Long): String = SimpleDateFormat("dd MMM à HH:mm", Locale.getDefault()).format(Date(timestamp))
