@@ -29,9 +29,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import com.quvntvn.carlocator.ui.theme.NeonBlue
+import com.quvntvn.carlocator.ui.theme.DeepBlack
+import com.quvntvn.carlocator.ui.theme.SurfaceBlack
+import com.quvntvn.carlocator.ui.theme.TextWhite
+import com.quvntvn.carlocator.ui.theme.TextGrey
+import com.quvntvn.carlocator.ui.theme.SuccessGreen
+import com.quvntvn.carlocator.ui.theme.ErrorRed
+import com.quvntvn.carlocator.ui.theme.DarkerSurface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,19 +48,10 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import com.quvntvn.carlocator.GarageDialog
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-
-// Couleurs
-val NeonBlue = Color(0xFF2979FF)
-val DeepBlack = Color(0xFF121212)
-val SurfaceBlack = Color(0xFF1E1E1E)
-val TextWhite = Color(0xFFEEEEEE)
-val TextGrey = Color(0xFFAAAAAA)
-val SuccessGreen = Color(0xFF00E676)
-val ErrorRed = Color(0xFFFF5252)
-val DarkerSurface = Color(0xFF101010)
 
 @Composable
 fun MainScreen(db: AppDatabase) {
@@ -348,9 +346,29 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
             } else { Text("Position inconnue ou non garée.", color = TextGrey, fontSize = 14.sp) }
             Spacer(modifier = Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = onParkClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))) { Text("📍 Garer Ici", color = TextWhite) }
+                Button(
+                    onClick = onParkClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
+                ) { Text("📍 Garer Ici", color = TextWhite) }
                 Spacer(modifier = Modifier.width(12.dp))
-                Button(onClick = onNavigateClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonBlue), shape = RoundedCornerShape(16.dp), enabled = car?.latitude != null) { Icon(Icons.Rounded.NearMe, null); Spacer(modifier = Modifier.width(8.dp)); Text("Y Aller") }
+                Button(
+                    onClick = onNavigateClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = car?.latitude != null
+                ) {
+                    Icon(Icons.Rounded.NearMe, null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Y Aller")
+                }
             }
         }
     }

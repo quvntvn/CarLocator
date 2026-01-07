@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun GarageDialog(
@@ -162,3 +164,5 @@ fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onD
         }
     }
 }
+
+fun formatDate(timestamp: Long): String = SimpleDateFormat("dd MMM à HH:mm", Locale.getDefault()).format(Date(timestamp))
