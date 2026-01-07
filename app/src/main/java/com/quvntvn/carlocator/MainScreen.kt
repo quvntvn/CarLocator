@@ -68,7 +68,7 @@ fun MainScreen(db: AppDatabase) {
     var showGarageDialog by remember { mutableStateOf(false) }
     var showTutorialDialog by remember { mutableStateOf(false) }
     val allCars by db.carDao().getAllCars().collectAsState(initial = emptyList())
-    var connectedCarName by remember { mutableStateOf<String?>(null) }
+    val connectedCarName by ConnectionState.connectedCarName.collectAsState()
 
     // FONCTION SÉCURISÉE POUR LANCER LE SERVICE
     fun startBackgroundService() {
@@ -137,45 +137,9 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
-    val currentCarsState = rememberUpdatedState(allCars)
-
-    // Écouteur Dynamique (UI)
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val action = intent.action
-                val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                }
-
-                if (device != null) {
-                    val car = currentCarsState.value.find { it.macAddress.equals(device.address, ignoreCase = true) }
-                    if (car != null) {
-                        if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
-                            connectedCarName = car.name
-                        } else if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
-                            if (connectedCarName == car.name) {
-                                connectedCarName = null
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        }
-        context.registerReceiver(receiver, filter)
-        onDispose { context.unregisterReceiver(receiver) }
-    }
-
     LaunchedEffect(allCars) {
         if (allCars.isNotEmpty()) {
-            checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
+            checkCurrentConnection(context, allCars)
         }
     }
 
@@ -420,20 +384,25 @@ fun saveCurrentLocation(context: Context, db: AppDatabase, scope: kotlinx.corout
 }
 
 @SuppressLint("MissingPermission")
-fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: (String?) -> Unit) {
+fun checkCurrentConnection(context: Context, cars: List<CarLocation>) {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val adapter = bluetoothManager.adapter ?: return
-    if (!adapter.isEnabled) { onResult(null); return }
+    if (!adapter.isEnabled) { ConnectionState.onDisconnected(); return }
 
     val listener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             val connectedDevices = proxy.connectedDevices
-            var foundName: String? = null
+            var foundCar: CarLocation? = null
             for (device in connectedDevices) {
-                val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
-                if (car != null) { foundName = car.name; break }
+                foundCar = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
+                if (foundCar != null) break
             }
-            if (foundName != null) onResult(foundName)
+
+            if (foundCar != null) {
+                ConnectionState.onConnected(foundCar.name)
+            } else {
+                ConnectionState.onDisconnected()
+            }
             adapter.closeProfileProxy(profile, proxy)
         }
         override fun onServiceDisconnected(profile: Int) {}
