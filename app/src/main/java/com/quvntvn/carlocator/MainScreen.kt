@@ -19,6 +19,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,16 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import com.quvntvn.carlocator.ui.theme.NeonBlue
-import com.quvntvn.carlocator.ui.theme.DeepBlack
-import com.quvntvn.carlocator.ui.theme.SurfaceBlack
-import com.quvntvn.carlocator.ui.theme.TextWhite
-import com.quvntvn.carlocator.ui.theme.TextGrey
-import com.quvntvn.carlocator.ui.theme.SuccessGreen
-import com.quvntvn.carlocator.ui.theme.ErrorRed
-import com.quvntvn.carlocator.ui.theme.DarkerSurface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,10 +43,19 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
-import com.quvntvn.carlocator.GarageDialog
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+
+// Couleurs (Rappel du thème)
+val NeonBlue = Color(0xFF2979FF)
+val DeepBlack = Color(0xFF121212)
+val SurfaceBlack = Color(0xFF1E1E1E)
+val TextWhite = Color(0xFFEEEEEE)
+val TextGrey = Color(0xFFAAAAAA)
+val SuccessGreen = Color(0xFF00E676)
+val ErrorRed = Color(0xFFFF5252)
+val DarkerSurface = Color(0xFF101010)
 
 @Composable
 fun MainScreen(db: AppDatabase) {
@@ -65,15 +69,18 @@ fun MainScreen(db: AppDatabase) {
     val allCars by db.carDao().getAllCars().collectAsState(initial = emptyList())
     var connectedCarName by remember { mutableStateOf<String?>(null) }
 
-    // GESTION PERMISSIONS & SERVICE
-    // On ne lance le service que si on a la permission
+    // FONCTION SÉCURISÉE POUR LANCER LE SERVICE
     fun startBackgroundService() {
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             val serviceIntent = Intent(context, BluetoothForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -83,7 +90,7 @@ fun MainScreen(db: AppDatabase) {
     ) { perms ->
         val locationGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true
         if (locationGranted) {
-            startBackgroundService() // Démarrage immédiat dès que l'utilisateur dit OUI
+            startBackgroundService()
         }
     }
 
@@ -93,7 +100,6 @@ fun MainScreen(db: AppDatabase) {
             showTutorialDialog = true
         }
 
-        // On demande les permissions
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -103,11 +109,9 @@ fun MainScreen(db: AppDatabase) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // Si on a déjà la permission (lancement suivant), on lance le service direct
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             startBackgroundService()
         } else {
-            // Sinon on demande (et le service se lancera dans le callback plus haut)
             permissionLauncher.launch(perms.toTypedArray())
         }
     }
@@ -161,7 +165,6 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
-    // Gestion de la carte : on vérifie la permission avant d'activer "isMyLocationEnabled"
     val hasLocationPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     val cameraPositionState = rememberCameraPositionState {
@@ -195,7 +198,6 @@ fun MainScreen(db: AppDatabase) {
             }
         }
 
-        // --- BARRE DU HAUT (MENU) ---
         Box(modifier = Modifier
             .align(Alignment.TopCenter)
             .statusBarsPadding()
@@ -207,7 +209,6 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
-        // --- PARTIE BASSE (INFOS) ---
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -265,30 +266,7 @@ fun MainScreen(db: AppDatabase) {
     }
 }
 
-@SuppressLint("MissingPermission")
-fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: (String?) -> Unit) {
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    val adapter = bluetoothManager.adapter ?: return
-    if (!adapter.isEnabled) { onResult(null); return }
-
-    val listener = object : BluetoothProfile.ServiceListener {
-        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-            val connectedDevices = proxy.connectedDevices
-            var foundName: String? = null
-            for (device in connectedDevices) {
-                val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
-                if (car != null) { foundName = car.name; break }
-            }
-            if (foundName != null) onResult(foundName)
-            adapter.closeProfileProxy(profile, proxy)
-        }
-        override fun onServiceDisconnected(profile: Int) {}
-    }
-    adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
-    adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
-}
-
-// --- UI COMPOSANTS ---
+// --- SOUS-COMPOSANTS ---
 
 @Composable
 fun TopMenuCard(onGarageClick: () -> Unit) {
@@ -346,29 +324,9 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
             } else { Text("Position inconnue ou non garée.", color = TextGrey, fontSize = 14.sp) }
             Spacer(modifier = Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onParkClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
-                ) { Text("📍 Garer Ici", color = TextWhite) }
+                Button(onClick = onParkClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))) { Text("📍 Garer Ici", color = TextWhite) }
                 Spacer(modifier = Modifier.width(12.dp))
-                Button(
-                    onClick = onNavigateClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = car?.latitude != null
-                ) {
-                    Icon(Icons.Rounded.NearMe, null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Y Aller")
-                }
+                Button(onClick = onNavigateClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonBlue), shape = RoundedCornerShape(16.dp), enabled = car?.latitude != null) { Icon(Icons.Rounded.NearMe, null); Spacer(modifier = Modifier.width(8.dp)); Text("Y Aller") }
             }
         }
     }
@@ -416,4 +374,134 @@ fun saveCurrentLocation(context: Context, db: AppDatabase, scope: kotlinx.corout
             }
         }
     }
+}
+
+@SuppressLint("MissingPermission")
+fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: (String?) -> Unit) {
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val adapter = bluetoothManager.adapter ?: return
+    if (!adapter.isEnabled) { onResult(null); return }
+
+    val listener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            val connectedDevices = proxy.connectedDevices
+            var foundName: String? = null
+            for (device in connectedDevices) {
+                val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
+                if (car != null) { foundName = car.name; break }
+            }
+            if (foundName != null) onResult(foundName)
+            adapter.closeProfileProxy(profile, proxy)
+        }
+        override fun onServiceDisconnected(profile: Int) {}
+    }
+    adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
+    adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
+}
+
+// --- DIALOGUE GARAGE (Ajout/Suppression) ---
+@Composable
+fun GarageDialog(
+    savedCars: List<CarLocation>,
+    currentSelectedCar: CarLocation?,
+    onAddCar: (String, String) -> Unit,
+    onDeleteCar: (CarLocation) -> Unit,
+    onCarSelect: (CarLocation) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showAddScreen by remember { mutableStateOf(false) }
+    var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkerSurface,
+        title = {
+            Text(if (showAddScreen) "Ajouter une voiture" else "Mon Garage", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        },
+        text = {
+            if (showAddScreen) {
+                Column {
+                    // MESSAGE AJOUTÉ ICI : Avertissement Bluetooth
+                    Text(
+                        "⚠️ Le Bluetooth doit être activé pour détecter votre voiture.",
+                        color = TextGrey,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    if (scannedDevices.isEmpty()) {
+                        Text("Recherche d'appareils Bluetooth...", color = NeonBlue, fontSize = 14.sp)
+                    } else {
+                        LazyColumn(modifier = Modifier.height(200.dp)) {
+                            items(scannedDevices) { device ->
+                                @SuppressLint("MissingPermission")
+                                val name = device.name ?: device.address
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onAddCar(device.address, name)
+                                            showAddScreen = false
+                                        }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Rounded.Bluetooth, null, tint = TextGrey)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(name, color = TextWhite, fontSize = 16.sp)
+                                }
+                                Divider(color = SurfaceBlack)
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    scannedDevices = getBondedDevices(context)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.height(200.dp)) {
+                    items(savedCars) { car ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onCarSelect(car) }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val isSelected = currentSelectedCar?.macAddress == car.macAddress
+                                Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextGrey)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(car.name, color = if (isSelected) NeonBlue else TextWhite, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                            }
+                            IconButton(onClick = { onDeleteCar(car) }) {
+                                Icon(Icons.Rounded.Delete, null, tint = ErrorRed)
+                            }
+                        }
+                        Divider(color = SurfaceBlack)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!showAddScreen) {
+                Button(onClick = { showAddScreen = true }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) {
+                    Text("Ajouter", color = TextWhite)
+                }
+            }
+        },
+        dismissButton = {
+            Button(onClick = { if (showAddScreen) showAddScreen = false else onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
+                Text(if (showAddScreen) "Retour" else "Fermer", color = TextGrey)
+            }
+        }
+    )
+}
+
+@SuppressLint("MissingPermission")
+fun getBondedDevices(context: Context): List<BluetoothDevice> {
+    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    return manager.adapter?.bondedDevices?.toList() ?: emptyList()
 }
