@@ -27,72 +27,174 @@ import androidx.compose.ui.window.Dialog
 import java.text.SimpleDateFormat
 import java.util.*
 
+// --- DIALOGUE GARAGE (Ajout/Suppression) ---
 @Composable
 fun GarageDialog(
     savedCars: List<CarLocation>,
-    currentSelectedCar: CarLocation?, // Pour savoir laquelle surligner
+    currentSelectedCar: CarLocation?,
     onAddCar: (String, String) -> Unit,
     onDeleteCar: (CarLocation) -> Unit,
-    onCarSelect: (CarLocation) -> Unit, // <--- NOUVEAU : Action quand on clique
+    onCarSelect: (CarLocation) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var showAddMode by remember { mutableStateOf(false) }
+    var showAddScreen by remember { mutableStateOf(false) }
+    var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
+    val context = LocalContext.current
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF1E1E1E),
-            contentColor = Color.White,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 500.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = if (showAddMode) "Ajouter une voiture" else "Mon Garage",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+    // On vérifie l'état du Bluetooth à chaque recomposition
+    var isBtEnabled by remember { mutableStateOf(isBluetoothEnabled(context)) }
 
-                if (showAddMode) {
-                    BluetoothPicker(
-                        onDevicePicked = { mac, defaultName ->
-                            onAddCar(mac, defaultName)
-                            showAddMode = false
-                        },
-                        onCancel = { showAddMode = false }
-                    )
-                } else {
-                    if (savedCars.isEmpty()) {
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text("Aucune voiture. Ajoutes-en une !", color = Color.Gray)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkerSurface,
+        title = {
+            Text(if (showAddScreen) "Ajouter une voiture" else "Mon Garage", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        },
+        text = {
+            if (showAddScreen) {
+                Column {
+                    // Vérification dynamique
+                    if (!isBtEnabled) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                        ) {
+                            Icon(Icons.Rounded.BluetoothDisabled, null, tint = ErrorRed, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "Le Bluetooth est désactivé.",
+                                color = ErrorRed,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                "Veuillez l'activer pour voir vos appareils.",
+                                color = TextGrey,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            // Bouton raccourci vers les paramètres Bluetooth
+                            Button(
+                                onClick = {
+                                    val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack)
+                            ) {
+                                Text("Ouvrir les Paramètres", color = TextWhite)
+                            }
+                            // Bouton pour rafraichir l'état après activation
+                            TextButton(onClick = { isBtEnabled = isBluetoothEnabled(context); if(isBtEnabled) scannedDevices = getBondedDevices(context) }) {
+                                Text("J'ai activé le Bluetooth, rafraîchir", color = NeonBlue)
+                            }
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.weight(1f)) {
-                            items(savedCars) { car ->
-                                SavedCarItem(
-                                    car = car,
-                                    isSelected = car.macAddress == currentSelectedCar?.macAddress, // On vérifie si c'est la voiture active
-                                    onClick = { onCarSelect(car) },
-                                    onDelete = { onDeleteCar(car) }
-                                )
+                        // Bluetooth ACTIF -> On affiche la liste
+                        Text(
+                            "Sélectionnez votre voiture dans la liste des appareils appairés :",
+                            color = TextGrey,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        if (scannedDevices.isEmpty()) {
+                            Text("Aucun appareil trouvé. Vérifiez que votre voiture est bien appairée dans les réglages du téléphone.", color = TextGrey, fontSize = 14.sp)
+                        } else {
+                            LazyColumn(modifier = Modifier.height(200.dp)) {
+                                items(scannedDevices) { device ->
+                                    @SuppressLint("MissingPermission")
+                                    val name = device.name ?: device.address
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onAddCar(device.address, name)
+                                                showAddScreen = false
+                                            }
+                                            .padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Rounded.Bluetooth, null, tint = NeonBlue)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(name, color = TextWhite, fontSize = 16.sp)
+                                    }
+                                    Divider(color = SurfaceBlack)
+                                }
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { showAddMode = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2979FF)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Rounded.Add, null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ajouter une voiture")
+                // Chargement initial
+                LaunchedEffect(Unit) {
+                    isBtEnabled = isBluetoothEnabled(context)
+                    if (isBtEnabled) {
+                        scannedDevices = getBondedDevices(context)
+                    }
+                }
+
+                // Réaction au retour de l'utilisateur (Lifecycle)
+                val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            isBtEnabled = isBluetoothEnabled(context)
+                            if (isBtEnabled) scannedDevices = getBondedDevices(context)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+            } else {
+                // ÉCRAN LISTE "MON GARAGE" (inchangé)
+                if (savedCars.isEmpty()) {
+                    Text("Aucune voiture enregistrée.", color = TextGrey)
+                } else {
+                    LazyColumn(modifier = Modifier.height(200.dp)) {
+                        items(savedCars) { car ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onCarSelect(car) }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val isSelected = currentSelectedCar?.macAddress == car.macAddress
+                                    Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextGrey)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(car.name, color = if (isSelected) NeonBlue else TextWhite, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                }
+                                IconButton(onClick = { onDeleteCar(car) }) {
+                                    Icon(Icons.Rounded.Delete, null, tint = ErrorRed)
+                                }
+                            }
+                            Divider(color = SurfaceBlack)
+                        }
                     }
                 }
             }
+        },
+        confirmButton = {
+            if (!showAddScreen) {
+                Button(onClick = { showAddScreen = true }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) {
+                    Text("Ajouter", color = TextWhite)
+                }
+            }
+        },
+        dismissButton = {
+            Button(onClick = { if (showAddScreen) showAddScreen = false else onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
+                Text(if (showAddScreen) "Retour" else "Fermer", color = TextGrey)
+            }
         }
-    }
+    )
+}
+
+// Fonction utilitaire à ajouter juste en dessous (ou à la fin du fichier)
+fun isBluetoothEnabled(context: Context): Boolean {
+    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    return manager.adapter?.isEnabled == true
 }
 
 @SuppressLint("MissingPermission")
