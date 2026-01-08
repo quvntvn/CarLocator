@@ -14,14 +14,12 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class CarBluetoothReceiver : BroadcastReceiver() {
 
     @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = PrefsManager(context)
-
         if (!prefs.isAppEnabled()) return
 
         val action = intent.action
@@ -33,46 +31,55 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         }
 
         if (device != null) {
-            val dao = AppDatabase.getDatabase(context).carDao()
+            val database = AppDatabase.getDatabase(context)
+            val dao = database.carDao()
 
-            if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
-                val pendingResult = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val savedCar = dao.getCarByMac(device.address) ?: return@launch
+            CoroutineScope(Dispatchers.IO).launch {
+                val savedCar = dao.getCarByMac(device.address)
+                if (savedCar == null) return@launch
 
-                        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                        val location = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
-
-                        val updatedCar = savedCar.copy(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            timestamp = System.currentTimeMillis()
-                        )
-                        dao.insertOrUpdateCar(updatedCar)
-
-                        if (prefs.isParkedNotifEnabled()) {
-                            sendNotification(
-                                context,
-                                context.getString(R.string.notif_parked_title),
-                                context.getString(R.string.notif_parked_body, savedCar.name)
-                            )
-                        }
-                    } finally {
-                        pendingResult.finish()
-                    }
-                }
-            } else if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    val savedCar = dao.getCarByMac(device.address)
-                    if (savedCar != null && prefs.isConnectionNotifEnabled()) {
-                        sendNotification(
-                            context,
+                // CAS 1 : CONNEXION
+                if (BluetoothDevice.ACTION_ACL_CONNECTED == action) {
+                    if (prefs.isConnectionNotifEnabled()) {
+                        sendNotification(context,
                             context.getString(R.string.notif_connected_title, savedCar.name),
-                            context.getString(R.string.notif_connected_body)
-                        )
+                            context.getString(R.string.notif_connected_body))
                     }
                 }
+
+                // CAS 2 : DÉCONNEXION (SAUVEGARDE PARKING)
+                if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
+                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
+                    // On demande la dernière position connue (plus rapide)
+                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                        if (location != null) {
+                            saveParking(context, dao, savedCar, location.latitude, location.longitude, prefs)
+                        } else {
+                            // Si lastLocation est nulle, on tente une requête de position rapide
+                            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                .addOnSuccessListener { freshLocation ->
+                                    freshLocation?.let {
+                                        saveParking(context, dao, savedCar, it.latitude, it.longitude, prefs)
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun saveParking(context: Context, dao: CarDao, car: CarLocation, lat: Double, lon: Double, prefs: PrefsManager) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val updatedCar = car.copy(latitude = lat, longitude = lon, timestamp = System.currentTimeMillis())
+            dao.insertOrUpdateCar(updatedCar)
+            prefs.saveCarLocation(lat, lon)
+
+            if (prefs.isParkedNotifEnabled()) {
+                sendNotification(context,
+                    context.getString(R.string.notif_parked_title),
+                    context.getString(R.string.notif_parked_body, car.name))
             }
         }
     }
@@ -90,7 +97,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_menu_myplaces)
             .setContentTitle(title)
             .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // Priorité haute pour être sûr de la voir
             .setAutoCancel(true)
             .build()
 

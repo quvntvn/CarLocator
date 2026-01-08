@@ -117,8 +117,11 @@ fun MainScreen(db: AppDatabase) {
                 if (device != null) {
                     val car = currentCarsState.value.find { it.macAddress.equals(device.address, ignoreCase = true) }
                     if (car != null) {
-                        if (action == BluetoothDevice.ACTION_ACL_CONNECTED) connectedCarName = car.name
-                        else if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED && connectedCarName == car.name) connectedCarName = null
+                        if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+                            connectedCarName = car.name
+                        } else if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
+                            if (connectedCarName == car.name) connectedCarName = null
+                        }
                     }
                 }
             }
@@ -221,7 +224,25 @@ fun MainScreen(db: AppDatabase) {
             GarageDialog(
                 savedCars = allCars,
                 currentSelectedCar = selectedCar,
-                onAddCar = { mac, name -> scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) } },
+                onAddCar = { mac, name ->
+                    scope.launch {
+                        val newCar = CarLocation(macAddress = mac, name = name)
+                        db.carDao().insertOrUpdateCar(newCar)
+
+                        // Déclenchement de la notification si déjà connecté lors de l'ajout
+                        checkCurrentConnection(context, listOf(newCar)) { connectedName ->
+                            if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
+                                val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
+                                    action = BluetoothDevice.ACTION_ACL_CONNECTED
+                                    putExtra(BluetoothDevice.EXTRA_DEVICE,
+                                        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager)
+                                            .adapter.getRemoteDevice(mac))
+                                }
+                                context.sendBroadcast(intent)
+                            }
+                        }
+                    }
+                },
                 onDeleteCar = { car -> scope.launch { db.carDao().deleteCar(car); if (selectedCar == car) selectedCar = null } },
                 onRenameCar = { mac, newName -> scope.launch { db.carDao().updateCarName(mac, newName) } },
                 onCarSelect = { car -> selectedCar = car; showGarageDialog = false },
@@ -417,7 +438,6 @@ fun GarageDialog(
     var carToRename by remember { mutableStateOf<CarLocation?>(null) }
     var newNameText by remember { mutableStateOf("") }
 
-    // Charger les appareils Bluetooth au passage à l'écran d'ajout
     LaunchedEffect(showAddScreen) {
         if (showAddScreen) {
             isBtEnabled = isBluetoothEnabled(context)
@@ -500,12 +520,11 @@ fun GarageDialog(
         }
     )
 
-    // Dialogue secondaire pour renommer la voiture
     if (carToRename != null) {
         AlertDialog(
             onDismissRequest = { carToRename = null },
             containerColor = SurfaceBlack,
-            title = { Text("Modifier le nom", color = TextWhite) },
+            title = { Text(stringResource(R.string.settings_title), color = TextWhite) },
             text = {
                 TextField(
                     value = newNameText,
@@ -523,10 +542,10 @@ fun GarageDialog(
                 TextButton(onClick = {
                     onRenameCar(carToRename!!.macAddress, newNameText)
                     carToRename = null
-                }) { Text("Enregistrer", color = NeonBlue) }
+                }) { Text(stringResource(R.string.ok), color = NeonBlue) }
             },
             dismissButton = {
-                TextButton(onClick = { carToRename = null }) { Text("Annuler", color = TextGrey) }
+                TextButton(onClick = { carToRename = null }) { Text(stringResource(R.string.back), color = TextGrey) }
             }
         )
     }
@@ -579,7 +598,6 @@ fun getBondedDevices(context: Context): List<BluetoothDevice> {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val adapter = bluetoothManager.adapter
 
-    // Vérifier les permissions sur Android 12+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
         return emptyList()
