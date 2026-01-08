@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.quvntvn.carlocator.CarLocation // <-- Vérifie cet import
 
-@Database(entities = [CarLocation::class], version = 1, exportSchema = false)
+@Database(entities = [CarLocation::class], version = 2) // Change 1 par 2 ici
 abstract class AppDatabase : RoomDatabase() {
     abstract fun carDao(): CarDao
 

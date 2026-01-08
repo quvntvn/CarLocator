@@ -27,4 +27,7 @@ interface CarDao {
 
     @Delete
     suspend fun deleteCar(car: CarLocation)
+
+    @Query("UPDATE car_location SET name = :newName WHERE macAddress = :mac")
+    suspend fun updateCarName(mac: String, newName: String)
 }
