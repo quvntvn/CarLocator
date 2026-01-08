@@ -74,37 +74,16 @@ class CarBluetoothReceiver : BroadcastReceiver() {
 
                 // CAS 2 : DÉCONNEXION (SAUVEGARDE PARKING)
                 if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
-                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-
-                    // On demande la dernière position connue (plus rapide)
-                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                        if (location != null) {
-                            saveParking(context, dao, savedCar, location.latitude, location.longitude, prefs)
-                        } else {
-                            // Si lastLocation est nulle, on tente une requête de position fraîche
-                            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                                .addOnSuccessListener { freshLocation ->
-                                    freshLocation?.let {
-                                        saveParking(context, dao, savedCar, it.latitude, it.longitude, prefs)
-                                    }
-                                }
-                        }
+                    val serviceIntent = Intent(context, ParkingService::class.java).apply {
+                        action = ParkingService.ACTION_START
+                        putExtra(ParkingService.EXTRA_CAR_ADDRESS, savedCar.address)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
                     }
                 }
-            }
-        }
-    }
-
-    private fun saveParking(context: Context, dao: CarDao, car: CarLocation, lat: Double, lon: Double, prefs: PrefsManager) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val updatedCar = car.copy(latitude = lat, longitude = lon, timestamp = System.currentTimeMillis())
-            dao.insertOrUpdateCar(updatedCar)
-            prefs.saveCarLocation(lat, lon)
-
-            if (prefs.isParkedNotifEnabled()) {
-                sendNotification(context,
-                    context.getString(R.string.notif_parked_title),
-                    context.getString(R.string.notif_parked_body, car.name))
             }
         }
     }
