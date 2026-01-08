@@ -139,8 +139,13 @@ fun MainScreen(db: AppDatabase) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
         }
-        if (selectedCar == null && allCars.isNotEmpty()) {
-            selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
+        // Si aucune voiture n'est sélectionnée ou si la voiture sélectionnée n'existe plus dans la liste
+        if (allCars.isNotEmpty()) {
+            if (selectedCar == null || allCars.none { it.macAddress == selectedCar?.macAddress }) {
+                selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
+            }
+        } else {
+            selectedCar = null
         }
     }
 
@@ -229,7 +234,6 @@ fun MainScreen(db: AppDatabase) {
                         val newCar = CarLocation(macAddress = mac, name = name)
                         db.carDao().insertOrUpdateCar(newCar)
 
-                        // Déclenchement de la notification si déjà connecté lors de l'ajout
                         checkCurrentConnection(context, listOf(newCar)) { connectedName ->
                             if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
                                 val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
@@ -243,7 +247,15 @@ fun MainScreen(db: AppDatabase) {
                         }
                     }
                 },
-                onDeleteCar = { car -> scope.launch { db.carDao().deleteCar(car); if (selectedCar == car) selectedCar = null } },
+                onDeleteCar = { car ->
+                    scope.launch {
+                        db.carDao().deleteCar(car)
+                        // ACTUALISATION : Si la voiture supprimée est la sélectionnée, on reset la sélection
+                        if (selectedCar?.macAddress == car.macAddress) {
+                            selectedCar = null
+                        }
+                    }
+                },
                 onRenameCar = { mac, newName -> scope.launch { db.carDao().updateCarName(mac, newName) } },
                 onCarSelect = { car -> selectedCar = car; showGarageDialog = false },
                 onDismiss = { showGarageDialog = false }
