@@ -1,142 +1,52 @@
 package com.quvntvn.carlocator
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.location.Location
-import android.os.Build
-import android.util.Log
-import android.bluetooth.BluetoothManager
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.firstOrNull
 
-// Ce Receiver gère TOUT : Connexion (Notif) et Déconnexion (GPS + Notif)
 class CarBluetoothReceiver : BroadcastReceiver() {
 
     @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
-        val device: BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-        }
+        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
 
-        if (device != null) {
-            val pendingResult = goAsync()
-            val db = AppDatabase.getDatabase(context)
-            val scope = CoroutineScope(Dispatchers.IO)
+        if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action && device != null) {
+            // L'appareil s'est déconnecté. On vérifie si c'est notre voiture.
+            val database = AppDatabase.getDatabase(context)
+            val dao = database.carDao()
+            val prefs = PrefsManager(context)
 
-            scope.launch {
-                try {
-                    val allCars = db.carDao().getAllCarsList()
-                    val car = allCars.find { it.macAddress.equals(device.address, ignoreCase = true) }
+            // On lance une coroutine car on ne peut pas faire de base de données directement dans onReceive
+            CoroutineScope(Dispatchers.IO).launch {
+                // On récupère la voiture enregistrée avec cette adresse MAC
+                val savedCar = dao.getCarByMac(device.address)
 
-                    if (car != null) {
-                        when (action) {
-                            BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                                Log.d("CarLocator", "🟢 Connecté à ${car.name}")
-                                sendNotification(context, "Voiture Connectée 🟢", "Connecté à ${car.name}", car.macAddress.hashCode())
-                                pendingResult.finish()
-                            }
-                            BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                                Log.d("CarLocator", "🔴 Déconnecté de ${car.name}. Recherche GPS...")
-                                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token).addOnSuccessListener { location: Location? ->
-                                    if (location != null) {
-                                        scope.launch {
-                                            val updatedCar = car.copy(
-                                                latitude = location.latitude,
-                                                longitude = location.longitude,
-                                                timestamp = System.currentTimeMillis()
-                                            )
-                                            db.carDao().insertOrUpdateCar(updatedCar)
-                                            sendNotification(context, "Voiture Garée 📍", "Position de ${car.name} enregistrée.", car.macAddress.hashCode(), true)
-                                            pendingResult.finish()
-                                        }
-                                    } else {
-                                        pendingResult.finish()
-                                    }
-                                }.addOnFailureListener { e ->
-                                    Log.e("CarLocator", "Erreur de localisation: ${e.message}")
-                                    pendingResult.finish()
-                                }
-                            }
-                            else -> pendingResult.finish()
-                        }
-                    } else {
-                        pendingResult.finish()
+                if (savedCar != null) {
+                    // C'est bien notre voiture ! On enregistre la position actuelle.
+                    val gpsTracker = GpsTracker(context)
+                    val location = gpsTracker.getLocation()
+
+                    if (location != null) {
+                        // On met à jour la position dans la base de données
+                        val updatedCar = savedCar.copy(
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            timestamp = System.currentTimeMillis()
+                        )
+                        dao.insertOrUpdateCar(updatedCar)
+
+                        // Optionnel : Sauvegarder aussi dans les préférences pour un accès rapide
+                        prefs.saveCarLocation(location.latitude, location.longitude)
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    pendingResult.finish()
                 }
             }
         }
     }
-
-    @SuppressLint("MissingPermission")
-    fun checkInitialConnectionState(context: Context, cars: List<CarLocation>) {
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val adapter = bluetoothManager.adapter
-        if (adapter == null || !adapter.isEnabled) return
-
-        val connectedDevices = adapter.bondedDevices
-        for (device in connectedDevices) {
-            val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
-            if (car != null) {
-                // If a car is found among bonded (and likely connected) devices,
-                // consider it connected.
-                Log.d("CarLocator", "Vérification initiale: ${car.name} est déjà connecté.")
-                // Optionally send a notification or update UI state here
-            }
-        }
-    }
-    private fun sendNotification(context: Context, title: String, content: String, notifId: Int, showAction: Boolean = false) {
-        val channelId = "car_locator_channel_v2"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Statut Voiture", NotificationManager.IMPORTANCE_DEFAULT)
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
-
-        val intent = Intent(context, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-
-        val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(title)
-            .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Priorité standard (pas haute)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // Affiche le contenu sur l'écran verrouillé
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-
-        if (showAction) {
-            builder.addAction(android.R.drawable.ic_menu_directions, "VOIR", pendingIntent)
-        }
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            NotificationManagerCompat.from(context).notify(notifId, builder.build())
-        }
-    }
-
-
 }

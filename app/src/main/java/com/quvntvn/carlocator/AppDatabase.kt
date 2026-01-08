@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.quvntvn.carlocator.CarLocation
+import com.quvntvn.carlocator.CarLocation // <-- Vérifie cet import
 
 @Database(entities = [CarLocation::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
@@ -21,7 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "car_locator"
                 )
-                    .fallbackToDestructiveMigration() // Si le schéma de la DB change, on la recrée sans crasher
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance

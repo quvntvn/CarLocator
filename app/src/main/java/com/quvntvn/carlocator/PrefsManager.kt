@@ -1,25 +1,38 @@
 package com.quvntvn.carlocator
 
 import android.content.Context
+import android.content.SharedPreferences
 
 class PrefsManager(context: Context) {
-    private val prefs = context.getSharedPreferences("car_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("car_locator_prefs", Context.MODE_PRIVATE)
 
-    // --- Gestion du premier lancement (Tutoriel) ---
+    companion object {
+        private const val KEY_FIRST_LAUNCH = "first_launch"
+        private const val KEY_LATITUDE = "last_car_lat"
+        private const val KEY_LONGITUDE = "last_car_lng"
+    }
+
     fun isFirstLaunch(): Boolean {
-        return prefs.getBoolean("is_first_launch", true)
+        return prefs.getBoolean(KEY_FIRST_LAUNCH, true)
     }
 
     fun setFirstLaunchDone() {
-        prefs.edit().putBoolean("is_first_launch", false).apply()
+        prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
     }
 
-    // --- Gestion Id Appareil (Si utilisé ailleurs) ---
-    fun saveCarDeviceId(address: String) {
-        prefs.edit().putString("car_mac_address", address).apply()
+    // --- AJOUTE CES FONCTIONS ---
+    fun saveCarLocation(lat: Double, lng: Double) {
+        prefs.edit()
+            .putFloat(KEY_LATITUDE, lat.toFloat())
+            .putFloat(KEY_LONGITUDE, lng.toFloat())
+            .apply()
     }
 
-    fun getCarDeviceId(): String? {
-        return prefs.getString("car_mac_address", null)
+    // Optionnel : Pour récupérer la position plus tard si besoin
+    fun getLastCarLocation(): Pair<Double, Double>? {
+        if (!prefs.contains(KEY_LATITUDE)) return null
+        val lat = prefs.getFloat(KEY_LATITUDE, 0f).toDouble()
+        val lng = prefs.getFloat(KEY_LONGITUDE, 0f).toDouble()
+        return Pair(lat, lng)
     }
 }
