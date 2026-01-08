@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -59,65 +61,40 @@ val ErrorRed = Color(0xFFFF5252)
 val DarkerSurface = Color(0xFF101010)
 
 @Composable
-fun MainScreen(db: AppDatabase) {
+fun MainScreen(db: AppDatabase) { // db est passé en paramètre depuis MainActivity
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefsManager = remember { PrefsManager(context) }
 
-    // États
+    // États UI
     var showGarageDialog by remember { mutableStateOf(false) }
     var showTutorialDialog by remember { mutableStateOf(false) }
-    val allCars by db.carDao().getAllCars().collectAsState(initial = emptyList())
+    var showSettingsDialog by remember { mutableStateOf(false) } // NOUVEAU : État pour les paramètres
+
+    // Données Base de données
+    val allCars by db.carDao().getAllCars().collectAsStateWithLifecycle(initialValue = emptyList())
     var connectedCarName by remember { mutableStateOf<String?>(null) }
+    var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
 
-    // FONCTION SÉCURISÉE POUR LANCER LE SERVICE
-    fun startBackgroundService() {
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            val serviceIntent = Intent(context, BluetoothForegroundService::class.java)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent)
-                } else {
-                    context.startService(serviceIntent)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    var showBackgroundLocationRationale by remember { mutableStateOf(false) }
-
-    val backgroundLocationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            startBackgroundService()
-        } else {
-            Toast.makeText(context, "L'accès à la position en arrière-plan est requis.", Toast.LENGTH_SHORT).show()
-        }
-    }
+    // --- LOGIQUE PERMISSIONS ---
+    // (Note : On ne lance plus de service Foreground ici pour éviter la notif "Protection Active")
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { perms ->
-        val locationGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        if (locationGranted) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                showBackgroundLocationRationale = true
-            } else {
-                startBackgroundService()
-            }
-        }
+    ) {
+        // Rien de spécial à faire, le BroadcastReceiver marchera tout seul si permissions OK
     }
 
-    // Au lancement de l'écran
+    // Au lancement
     LaunchedEffect(Unit) {
         if (prefsManager.isFirstLaunch()) {
             showTutorialDialog = true
         }
 
-        val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        val perms = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms.add(Manifest.permission.BLUETOOTH_CONNECT)
             perms.add(Manifest.permission.BLUETOOTH_SCAN)
@@ -126,23 +103,20 @@ fun MainScreen(db: AppDatabase) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                showBackgroundLocationRationale = true
-            } else {
-                startBackgroundService()
-            }
-        } else {
+        // On demande les permissions si pas déjà données
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(perms.toTypedArray())
         }
     }
 
     val currentCarsState = rememberUpdatedState(allCars)
 
-    // Écouteur Dynamique (UI)
+    // Écouteur Bluetooth pour mise à jour UI (Pastille verte)
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
+                if (!prefsManager.isAppEnabled()) return // Si app désactivée, on ignore
+
                 val action = intent.action
                 val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -173,21 +147,19 @@ fun MainScreen(db: AppDatabase) {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
+    // Mise à jour de l'état connecté au démarrage
     LaunchedEffect(allCars) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
         }
-    }
-
-    var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
-    LaunchedEffect(allCars) {
+        // Sélection automatique de la première voiture au démarrage
         if (selectedCar == null && allCars.isNotEmpty()) {
             selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
         }
     }
 
+    // Caméra de la carte
     val hasLocationPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(48.8566, 2.3522), 15f)
     }
@@ -200,7 +172,10 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
+    // --- INTERFACE ---
     Box(modifier = Modifier.fillMaxSize().background(DeepBlack)) {
+
+        // 1. CARTE GOOGLE MAPS
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
@@ -219,6 +194,7 @@ fun MainScreen(db: AppDatabase) {
             }
         }
 
+        // 2. BARRE SUPÉRIEURE (MENU GARAGE + PARAMÈTRES)
         Box(modifier = Modifier
             .align(Alignment.TopCenter)
             .statusBarsPadding()
@@ -226,10 +202,12 @@ fun MainScreen(db: AppDatabase) {
             .padding(top = 16.dp, start = 16.dp, end = 16.dp)
         ) {
             TopMenuCard(
-                onGarageClick = { showGarageDialog = true }
+                onGarageClick = { showGarageDialog = true },
+                onSettingsClick = { showSettingsDialog = true } // Action pour ouvrir les paramètres
             )
         }
 
+        // 3. BARRE INFÉRIEURE (INFO VOITURE + ACTIONS)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -237,6 +215,7 @@ fun MainScreen(db: AppDatabase) {
                 .padding(16.dp)
                 .fillMaxWidth()
         ) {
+            // Bouton "Ma position"
             SmallFloatingButton(
                 icon = Icons.Rounded.MyLocation,
                 onClick = {
@@ -244,11 +223,14 @@ fun MainScreen(db: AppDatabase) {
                         LocationServices.getFusedLocationProviderClient(context).lastLocation.addOnSuccessListener { location ->
                             if (location != null) scope.launch { cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(location.latitude, location.longitude), 15f)) }
                         }
+                    } else {
+                        Toast.makeText(context, "Permission GPS requise", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.align(Alignment.End).padding(bottom = 16.dp)
             )
 
+            // Carte d'info voiture
             CarInfoCard(
                 car = selectedCar,
                 connectedCarName = connectedCarName,
@@ -267,6 +249,8 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
+        // --- DIALOGUES ---
+
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,
@@ -278,33 +262,18 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
+        if (showSettingsDialog) {
+            SettingsDialog(
+                prefs = prefsManager,
+                onDismiss = { showSettingsDialog = false }
+            )
+        }
+
         if (showTutorialDialog) {
             TutorialDialog(onDismiss = {
                 prefsManager.setFirstLaunchDone()
                 showTutorialDialog = false
             })
-        }
-
-        if (showBackgroundLocationRationale) {
-            AlertDialog(
-                onDismissRequest = { showBackgroundLocationRationale = false },
-                containerColor = DarkerSurface,
-                title = { Text("Permission Requise", color = TextWhite) },
-                text = { Text("Pour fonctionner correctement, l'application a besoin de l'autorisation d'accéder à votre position en arrière-plan.", color = TextGrey) },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showBackgroundLocationRationale = false
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)
-                    ) {
-                        Text("Compris", color = TextWhite)
-                    }
-                }
-            )
         }
     }
 }
@@ -312,25 +281,38 @@ fun MainScreen(db: AppDatabase) {
 // --- SOUS-COMPOSANTS ---
 
 @Composable
-fun TopMenuCard(onGarageClick: () -> Unit) {
+fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).clickable { onGarageClick() },
+        modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)),
         color = SurfaceBlack,
         contentColor = TextWhite
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Rounded.Menu, contentDescription = "Menu", tint = NeonBlue)
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                "Mon Garage",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
-            )
-            Spacer(modifier = Modifier.weight(1f))
+            // Zone "Mon Garage" cliquable
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onGarageClick() }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Menu, contentDescription = "Menu", tint = NeonBlue)
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    "Mon Garage",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
+
+            // Bouton Paramètres
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Rounded.Settings, contentDescription = "Paramètres", tint = TextGrey)
+            }
         }
     }
 }
@@ -373,6 +355,96 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
             }
         }
     }
+}
+
+// --- DIALOGUE PARAMÈTRES (NOUVEAU) ---
+@Composable
+fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit) {
+    // On charge les états actuels
+    var isAppEnabled by remember { mutableStateOf(prefs.isAppEnabled()) }
+    var isConnectionNotif by remember { mutableStateOf(prefs.isConnectionNotifEnabled()) }
+    var isParkedNotif by remember { mutableStateOf(prefs.isParkedNotifEnabled()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkerSurface,
+        title = { Text("Paramètres", color = TextWhite, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                // Switch Principal
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Activer l'application", color = TextWhite, fontWeight = FontWeight.Bold)
+                        Text("Désactiver pour tout arrêter", color = TextGrey, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = isAppEnabled,
+                        onCheckedChange = {
+                            isAppEnabled = it
+                            prefs.setAppEnabled(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NeonBlue,
+                            checkedTrackColor = SurfaceBlack,
+                            uncheckedThumbColor = TextGrey,
+                            uncheckedTrackColor = SurfaceBlack
+                        )
+                    )
+                }
+
+                Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
+
+                // Switch Notif Connexion
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Notif. Connexion Bluetooth", color = TextWhite)
+                    Switch(
+                        checked = isConnectionNotif,
+                        onCheckedChange = {
+                            isConnectionNotif = it
+                            prefs.setConnectionNotifEnabled(it)
+                        },
+                        enabled = isAppEnabled,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NeonBlue,
+                            checkedTrackColor = SurfaceBlack
+                        )
+                    )
+                }
+
+                // Switch Notif Stationnement
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Notif. Voiture Garée", color = TextWhite)
+                    Switch(
+                        checked = isParkedNotif,
+                        onCheckedChange = {
+                            isParkedNotif = it
+                            prefs.setParkedNotifEnabled(it)
+                        },
+                        enabled = isAppEnabled,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NeonBlue,
+                            checkedTrackColor = SurfaceBlack
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK", color = NeonBlue) }
+        }
+    )
 }
 
 @Composable
@@ -442,7 +514,7 @@ fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: 
     adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
 }
 
-// --- DIALOGUE GARAGE AVEC TON CODE ---
+// --- DIALOGUE GARAGE ---
 @Composable
 fun GarageDialog(
     savedCars: List<CarLocation>,
@@ -456,7 +528,6 @@ fun GarageDialog(
     var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     val context = LocalContext.current
 
-    // Ton code de vérification
     var isBtEnabled by remember { mutableStateOf(isBluetoothEnabled(context)) }
 
     AlertDialog(
@@ -479,7 +550,7 @@ fun GarageDialog(
                             Text("Veuillez l'activer pour voir vos appareils.", color = TextGrey, fontSize = 14.sp)
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = { val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); context.startActivity(intent) },
+                                onClick = { val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS); context.startActivity(intent) },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack)
                             ) { Text("Ouvrir les Paramètres", color = TextWhite) }
                             TextButton(onClick = { isBtEnabled = isBluetoothEnabled(context); if(isBtEnabled) scannedDevices = getBondedDevices(context) }) {
@@ -513,25 +584,12 @@ fun GarageDialog(
                     isBtEnabled = isBluetoothEnabled(context)
                     if (isBtEnabled) scannedDevices = getBondedDevices(context)
                 }
-                val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                            isBtEnabled = isBluetoothEnabled(context)
-                            if (isBtEnabled) scannedDevices = getBondedDevices(context)
-                        }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                }
             } else {
-                // LISTE DES VOITURES SAUVEGARDÉES (Utilise maintenant SavedCarItem)
                 if (savedCars.isEmpty()) {
                     Text("Aucune voiture enregistrée.", color = TextGrey)
                 } else {
                     LazyColumn(modifier = Modifier.height(200.dp)) {
                         items(savedCars) { car ->
-                            // J'AI CONNECTÉ TA FONCTION SavedCarItem ICI
                             SavedCarItem(
                                 car = car,
                                 isSelected = currentSelectedCar?.macAddress == car.macAddress,
@@ -554,7 +612,6 @@ fun GarageDialog(
     )
 }
 
-// TA FONCTION DE STYLE POUR LA LISTE
 @Composable
 fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
     val backgroundColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else SurfaceBlack

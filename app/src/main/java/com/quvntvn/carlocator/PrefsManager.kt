@@ -10,17 +10,16 @@ class PrefsManager(context: Context) {
         private const val KEY_FIRST_LAUNCH = "first_launch"
         private const val KEY_LATITUDE = "last_car_lat"
         private const val KEY_LONGITUDE = "last_car_lng"
+
+        // Nouveaux réglages
+        private const val KEY_APP_ENABLED = "app_enabled"
+        private const val KEY_NOTIF_CONNECTION = "notif_connection"
+        private const val KEY_NOTIF_PARKED = "notif_parked"
     }
 
-    fun isFirstLaunch(): Boolean {
-        return prefs.getBoolean(KEY_FIRST_LAUNCH, true)
-    }
+    fun isFirstLaunch(): Boolean = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
+    fun setFirstLaunchDone() = prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
 
-    fun setFirstLaunchDone() {
-        prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
-    }
-
-    // --- AJOUTE CES FONCTIONS ---
     fun saveCarLocation(lat: Double, lng: Double) {
         prefs.edit()
             .putFloat(KEY_LATITUDE, lat.toFloat())
@@ -28,11 +27,24 @@ class PrefsManager(context: Context) {
             .apply()
     }
 
-    // Optionnel : Pour récupérer la position plus tard si besoin
     fun getLastCarLocation(): Pair<Double, Double>? {
         if (!prefs.contains(KEY_LATITUDE)) return null
         val lat = prefs.getFloat(KEY_LATITUDE, 0f).toDouble()
         val lng = prefs.getFloat(KEY_LONGITUDE, 0f).toDouble()
         return Pair(lat, lng)
     }
+
+    // --- GESTION DES PARAMÈTRES ---
+
+    // Activer/Désactiver l'application
+    fun isAppEnabled(): Boolean = prefs.getBoolean(KEY_APP_ENABLED, true)
+    fun setAppEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_APP_ENABLED, enabled).apply()
+
+    // Notifs Connexion
+    fun isConnectionNotifEnabled(): Boolean = prefs.getBoolean(KEY_NOTIF_CONNECTION, true)
+    fun setConnectionNotifEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF_CONNECTION, enabled).apply()
+
+    // Notifs Stationnement
+    fun isParkedNotifEnabled(): Boolean = prefs.getBoolean(KEY_NOTIF_PARKED, true)
+    fun setParkedNotifEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF_PARKED, enabled).apply()
 }
