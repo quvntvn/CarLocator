@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CarDao {
+    // Gardez cette version, elle est idéale pour observer les changements
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
 
@@ -21,7 +22,7 @@ interface CarDao {
     @Delete
     suspend fun deleteCar(car: CarLocation)
 
-    // Dans CarDao.kt, ajoute cette ligne :
-    @Query("SELECT * FROM car_location")
-    suspend fun getAllCarsList(): List<CarLocation>
+    // ↓↓↓ SUPPRIMEZ CETTE FONCTION EN DOUBLE ↓↓↓
+    // @Query("SELECT * FROM car_location")
+    // suspend fun getAllCarsList(): List<CarLocation>
 }

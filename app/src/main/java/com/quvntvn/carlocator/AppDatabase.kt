@@ -20,7 +20,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "car_locator_db"
                 )
-                    .fallbackToDestructiveMigration() // Ajoute ça : si la DB change, on reset tout sans crasher
+                    .fallbackToDestructiveMigration() // Si le schéma de la DB change, on la recrée sans crasher
                     .build()
                 INSTANCE = instance
                 instance
