@@ -33,7 +33,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         val prefs = PrefsManager(context)
         if (!prefs.isAppEnabled()) return
 
-        val action = intent.action
+        val intentAction = intent.action
         val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         } else {
@@ -41,18 +41,18 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
 
-        if (device != null && action != null) {
+        if (device != null && intentAction != null) {
             // Logique anti-doublon : Ignorer si même appareil + même action en moins de 2 secondes
             val currentTime = System.currentTimeMillis()
             if (device.address == lastProcessedAddress &&
-                action == lastProcessedAction &&
+                intentAction == lastProcessedAction &&
                 (currentTime - lastProcessedTime) < 2000) {
                 return
             }
 
             // Mémoriser le dernier événement traité
             lastProcessedAddress = device.address
-            lastProcessedAction = action
+            lastProcessedAction = intentAction
             lastProcessedTime = currentTime
 
             val database = AppDatabase.getDatabase(context)
@@ -64,7 +64,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
 
                 // CAS 1 : CONNEXION
                 // On accepte soit l'événement système officiel, soit notre action forcée manuellement
-                if (BluetoothDevice.ACTION_ACL_CONNECTED == action || ACTION_FORCE_CONNECT == action) {
+                if (BluetoothDevice.ACTION_ACL_CONNECTED == intentAction || ACTION_FORCE_CONNECT == intentAction) {
                     if (prefs.isConnectionNotifEnabled()) {
                         sendNotification(context,
                             context.getString(R.string.notif_connected_title, savedCar.name),
@@ -73,10 +73,10 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 }
 
                 // CAS 2 : DÉCONNEXION (SAUVEGARDE PARKING)
-                if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
+                if (BluetoothDevice.ACTION_ACL_DISCONNECTED == intentAction) {
                     val serviceIntent = Intent(context, ParkingService::class.java).apply {
                         action = ParkingService.ACTION_START
-                        putExtra(ParkingService.EXTRA_CAR_ADDRESS, savedCar.address)
+                        putExtra(ParkingService.EXTRA_CAR_ADDRESS, savedCar.macAddress)
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.startForegroundService(serviceIntent)

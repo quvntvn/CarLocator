@@ -108,7 +108,7 @@ class ParkingService : Service() {
                 sendNotification(context,
                     context.getString(R.string.notif_parked_title),
                     context.getString(R.string.notif_parked_body, car.name),
-                    car.address)
+                    car.macAddress)
             }
         }
     }
