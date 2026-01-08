@@ -35,9 +35,9 @@
     <string name="notif_parked">Notif. Voiture Garée</string>
 
     <string name="notif_channel_name">Événements Voiture</string>
-    <string name="notif_connected_title">Connecté à %1$s</string>
+    <string name="notif_connected_title">🟢 Connecté à %1$s</string>
     <string name="notif_connected_body">Bonne route !</string>
-    <string name="notif_parked_title">Voiture Garée</string>
+    <string name="notif_parked_title">📍 Voiture Garée</string>
     <string name="notif_parked_body">Position enregistrée pour %1$s</string>
 
     <string name="tuto_title">Bienvenue sur CarLocator ! 🚗</string>

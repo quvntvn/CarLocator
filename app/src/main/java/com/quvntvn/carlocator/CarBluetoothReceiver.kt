@@ -17,6 +17,13 @@ import kotlinx.coroutines.launch
 
 class CarBluetoothReceiver : BroadcastReceiver() {
 
+    // Sécurité pour éviter les doublons (certains appareils envoient 2 signaux à la suite)
+    companion object {
+        private var lastProcessedAddress: String? = null
+        private var lastProcessedAction: String? = null
+        private var lastProcessedTime: Long = 0
+    }
+
     @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = PrefsManager(context)
@@ -30,7 +37,20 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
 
-        if (device != null) {
+        if (device != null && action != null) {
+            // Logique anti-doublon : Ignorer si même appareil + même action en moins de 2 secondes
+            val currentTime = System.currentTimeMillis()
+            if (device.address == lastProcessedAddress &&
+                action == lastProcessedAction &&
+                (currentTime - lastProcessedTime) < 2000) {
+                return
+            }
+
+            // Mémoriser le dernier événement traité
+            lastProcessedAddress = device.address
+            lastProcessedAction = action
+            lastProcessedTime = currentTime
+
             val database = AppDatabase.getDatabase(context)
             val dao = database.carDao()
 
@@ -56,7 +76,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                         if (location != null) {
                             saveParking(context, dao, savedCar, location.latitude, location.longitude, prefs)
                         } else {
-                            // Si lastLocation est nulle, on tente une requête de position rapide
+                            // Si lastLocation est nulle, on tente une requête de position fraîche
                             fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                                 .addOnSuccessListener { freshLocation ->
                                     freshLocation?.let {
@@ -89,7 +109,11 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, context.getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_DEFAULT)
+            val channel = NotificationChannel(
+                channelId,
+                context.getString(R.string.notif_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            )
             manager.createNotificationChannel(channel)
         }
 
@@ -97,10 +121,15 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_menu_myplaces)
             .setContentTitle(title)
             .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_HIGH) // Priorité haute pour être sûr de la voir
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
 
-        manager.notify(System.currentTimeMillis().toInt(), notification)
+        manager.notify(deviceAddressToId(lastProcessedAddress), notification)
+    }
+
+    // Génère un ID unique par voiture pour éviter d'écraser les notifs si plusieurs voitures bougent
+    private fun deviceAddressToId(address: String?): Int {
+        return address?.hashCode() ?: System.currentTimeMillis().toInt()
     }
 }
