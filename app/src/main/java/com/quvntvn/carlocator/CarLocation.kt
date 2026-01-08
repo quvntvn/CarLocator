@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 
 // On force le nom de la table ici pour être sûr
-@Entity(tableName = "car_location")
+@Entity
 data class CarLocation(
     @PrimaryKey val macAddress: String,
     val name: String,

@@ -12,12 +12,10 @@ import com.quvntvn.carlocator.AppDatabase
 
 @Dao
 interface CarDao {
-    // CORRECTION ICI : "FROM car_location" au lieu de CarLocation
-    @Query("SELECT * FROM car_location")
+    @Query("SELECT * FROM CarLocation")
     fun getAllCars(): Flow<List<CarLocation>>
 
-    // CORRECTION ICI : "FROM car_location"
-    @Query("SELECT * FROM car_location WHERE macAddress = :macAddress LIMIT 1")
+    @Query("SELECT * FROM CarLocation WHERE macAddress = :macAddress LIMIT 1")
     suspend fun getCarByMac(macAddress: String): CarLocation?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
