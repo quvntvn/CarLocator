@@ -236,8 +236,9 @@ fun MainScreen(db: AppDatabase) {
 
                         checkCurrentConnection(context, listOf(newCar)) { connectedName ->
                             if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
+                                // CORRECTION ICI : Utilisation de l'action personnalisée
                                 val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
-                                    action = BluetoothDevice.ACTION_ACL_CONNECTED
+                                    action = "com.quvntvn.carlocator.ACTION_FORCE_CONNECT"
                                     putExtra(BluetoothDevice.EXTRA_DEVICE,
                                         (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager)
                                             .adapter.getRemoteDevice(mac))

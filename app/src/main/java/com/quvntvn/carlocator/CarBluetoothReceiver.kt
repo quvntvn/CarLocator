@@ -23,6 +23,9 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         private var lastProcessedAddress: String? = null
         private var lastProcessedAction: String? = null
         private var lastProcessedTime: Long = 0
+
+        // Constante pour l'action personnalisée
+        const val ACTION_FORCE_CONNECT = "com.quvntvn.carlocator.ACTION_FORCE_CONNECT"
     }
 
     @SuppressLint("MissingPermission")
@@ -60,7 +63,8 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 if (savedCar == null) return@launch
 
                 // CAS 1 : CONNEXION
-                if (BluetoothDevice.ACTION_ACL_CONNECTED == action) {
+                // On accepte soit l'événement système officiel, soit notre action forcée manuellement
+                if (BluetoothDevice.ACTION_ACL_CONNECTED == action || ACTION_FORCE_CONNECT == action) {
                     if (prefs.isConnectionNotifEnabled()) {
                         sendNotification(context,
                             context.getString(R.string.notif_connected_title, savedCar.name),
