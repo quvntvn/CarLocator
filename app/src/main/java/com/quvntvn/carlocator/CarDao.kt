@@ -9,20 +9,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CarDao {
-    // Gardez cette version, elle est idéale pour observer les changements
+    // CORRECTION ICI : "FROM car_location" au lieu de CarLocation
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
 
-    @Query("SELECT * FROM car_location WHERE macAddress = :mac LIMIT 1")
-    suspend fun getCarByMac(mac: String): CarLocation?
+    // CORRECTION ICI : "FROM car_location"
+    @Query("SELECT * FROM car_location WHERE macAddress = :macAddress LIMIT 1")
+    suspend fun getCarByMac(macAddress: String): CarLocation?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateCar(car: CarLocation)
 
     @Delete
     suspend fun deleteCar(car: CarLocation)
-
-    // ↓↓↓ SUPPRIMEZ CETTE FONCTION EN DOUBLE ↓↓↓
-    // @Query("SELECT * FROM car_location")
-    // suspend fun getAllCarsList(): List<CarLocation>
 }
