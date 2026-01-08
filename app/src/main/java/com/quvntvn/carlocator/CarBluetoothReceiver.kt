@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,10 +20,16 @@ class CarBluetoothReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = PrefsManager(context)
 
+        // 1. MASTER SWITCH : Si l'app est désactivée, on stoppe tout
         if (!prefs.isAppEnabled()) return
 
         val action = intent.action
-        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        }
 
         if (device != null) {
             val database = AppDatabase.getDatabase(context)
@@ -30,39 +37,42 @@ class CarBluetoothReceiver : BroadcastReceiver() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 val savedCar = dao.getCarByMac(device.address)
+
+                // Si ce n'est pas une de nos voitures enregistrées, on ignore
                 if (savedCar == null) return@launch
 
                 // CAS 1 : CONNEXION
                 if (BluetoothDevice.ACTION_ACL_CONNECTED == action) {
                     if (prefs.isConnectionNotifEnabled()) {
-                        sendNotification(
-                            context,
+                        sendNotification(context,
                             context.getString(R.string.notif_connected_title, savedCar.name),
-                            context.getString(R.string.notif_connected_body)
-                        )
+                            context.getString(R.string.notif_connected_body))
                     }
                 }
 
-                // CAS 2 : DÉCONNEXION (GARÉ)
+                // CAS 2 : DÉCONNEXION (C'est ici que l'on enregistre le parking)
                 if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
-                    val gpsTracker = GpsTracker(context)
-                    val location = gpsTracker.getLocation()
+                    // Utilisation directe du FusedLocationProvider pour plus de fiabilité en tâche de fond
+                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-                    if (location != null) {
-                        val updatedCar = savedCar.copy(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            timestamp = System.currentTimeMillis()
-                        )
-                        dao.insertOrUpdateCar(updatedCar)
-                        prefs.saveCarLocation(location.latitude, location.longitude)
-
-                        if (prefs.isParkedNotifEnabled()) {
-                            sendNotification(
-                                context,
-                                context.getString(R.string.notif_parked_title),
-                                context.getString(R.string.notif_parked_body, savedCar.name)
+                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                        if (location != null) {
+                            val updatedCar = savedCar.copy(
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                                timestamp = System.currentTimeMillis()
                             )
+
+                            CoroutineScope(Dispatchers.IO).launch {
+                                dao.insertOrUpdateCar(updatedCar)
+                                prefs.saveCarLocation(location.latitude, location.longitude)
+
+                                if (prefs.isParkedNotifEnabled()) {
+                                    sendNotification(context,
+                                        context.getString(R.string.notif_parked_title),
+                                        context.getString(R.string.notif_parked_body, savedCar.name))
+                                }
+                            }
                         }
                     }
                 }
@@ -75,8 +85,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelName = context.getString(R.string.notif_channel_name)
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
+            val channel = NotificationChannel(channelId, context.getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_DEFAULT)
             manager.createNotificationChannel(channel)
         }
 
@@ -84,6 +93,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_menu_myplaces)
             .setContentTitle(title)
             .setContentText(content)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
 
