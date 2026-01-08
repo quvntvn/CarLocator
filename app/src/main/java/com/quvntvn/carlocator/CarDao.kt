@@ -6,6 +6,9 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
+import com.quvntvn.carlocator.CarLocation
+import com.quvntvn.carlocator.AppDatabase
+
 
 @Dao
 interface CarDao {
