@@ -39,6 +39,9 @@
     <string name="notif_parked_title">📍 Car Parked</string>
     <string name="notif_parked_body">Location saved for %1$s</string>
 
+    <string name="parking_service_notif_title">Saving car location</string>
+    <string name="parking_service_notif_body">Your car\'s parking spot is being saved...</string>
+
     <string name="tuto_title">Welcome to CarLocator! 🚗</string>
     <string name="tuto_intro">How to use the app:</string>
     <string name="tuto_step1">1. Open \'My Garage\' menu and add your car via Bluetooth.</string>
