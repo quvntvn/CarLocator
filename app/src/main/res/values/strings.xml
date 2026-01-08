@@ -48,6 +48,10 @@
     <string name="tuto_step2">2. That\'s it! The app automatically saves your location when Bluetooth disconnects.</string>
     <string name="tuto_step3">3. Use \'Go There\' to find your vehicle.</string>
     <string name="tuto_button">Let\'s go!</string>
+    <string name="settings_show_tuto">How does it work?</string>
+    <string name="tuto_battery_title">Battery Optimization</string>
+    <string name="tuto_battery_msg">IMPORTANT: To automatically detect your car in the background, please disable the battery optimization for CarLocator in your phone settings (Application > Battery</string>
+
 
     <string name="perm_gps_required">GPS Permission required</string>
 </resources>

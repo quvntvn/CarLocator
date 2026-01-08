@@ -47,4 +47,13 @@ class PrefsManager(context: Context) {
     // Notifs Stationnement
     fun isParkedNotifEnabled(): Boolean = prefs.getBoolean(KEY_NOTIF_PARKED, true)
     fun setParkedNotifEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF_PARKED, enabled).apply()
+
+    // --- NOUVEAU : Sauvegarde de la sélection ---
+    fun saveLastSelectedCarMac(mac: String) {
+        prefs.edit().putString(KEY_SELECTED_CAR_MAC, mac).apply()
+    }
+
+    fun getLastSelectedCarMac(): String? {
+        return prefs.getString(KEY_SELECTED_CAR_MAC, null)
+    }
 }

@@ -23,8 +23,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -134,15 +136,21 @@ fun MainScreen(db: AppDatabase) {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // Gestion de la sélection automatique au démarrage
+    // Gestion de la sélection automatique au démarrage et PERSISTANCE
     LaunchedEffect(allCars) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
         }
-        // Si aucune voiture n'est sélectionnée ou si la voiture sélectionnée n'existe plus dans la liste
+        // Logique de sélection intelligente
         if (allCars.isNotEmpty()) {
+            // Si aucune sélection ou sélection invalide
             if (selectedCar == null || allCars.none { it.macAddress == selectedCar?.macAddress }) {
-                selectedCar = allCars.find { it.latitude != null } ?: allCars.first()
+                // 1. Essayer de récupérer la dernière voiture sélectionnée sauvegardée
+                val lastMac = prefsManager.getLastSelectedCarMac()
+                val lastSavedCar = allCars.find { it.macAddress == lastMac }
+
+                // 2. Sinon priorité : Saved > Position connue > Première liste
+                selectedCar = lastSavedCar ?: allCars.find { it.latitude != null } ?: allCars.first()
             }
         } else {
             selectedCar = null
@@ -176,7 +184,11 @@ fun MainScreen(db: AppDatabase) {
                         state = MarkerState(position = LatLng(car.latitude, car.longitude)),
                         title = car.name,
                         snippet = "${stringResource(R.string.parked_on)}${formatDate(car.timestamp)}",
-                        onClick = { selectedCar = car; false }
+                        onClick = {
+                            selectedCar = car
+                            prefsManager.saveLastSelectedCarMac(car.macAddress)
+                            false
+                        }
                     )
                 }
             }
@@ -234,12 +246,10 @@ fun MainScreen(db: AppDatabase) {
                         val newCar = CarLocation(macAddress = mac, name = name)
                         db.carDao().insertOrUpdateCar(newCar)
 
-                        // --- MODIFICATION ICI ---
-                        // 1. Sélectionner la nouvelle voiture
+                        // Sélectionner la nouvelle voiture et sauvegarder
                         selectedCar = newCar
-                        // 2. Fermer le dialogue
+                        prefsManager.saveLastSelectedCarMac(mac)
                         showGarageDialog = false
-                        // ------------------------
 
                         checkCurrentConnection(context, listOf(newCar)) { connectedName ->
                             if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
@@ -257,20 +267,31 @@ fun MainScreen(db: AppDatabase) {
                 onDeleteCar = { car ->
                     scope.launch {
                         db.carDao().deleteCar(car)
-                        // Si la voiture supprimée est la sélectionnée, on reset la sélection
                         if (selectedCar?.macAddress == car.macAddress) {
                             selectedCar = null
+                            prefsManager.saveLastSelectedCarMac("") // Reset save
                         }
                     }
                 },
                 onRenameCar = { mac, newName -> scope.launch { db.carDao().updateCarName(mac, newName) } },
-                onCarSelect = { car -> selectedCar = car; showGarageDialog = false },
+                onCarSelect = { car ->
+                    selectedCar = car
+                    prefsManager.saveLastSelectedCarMac(car.macAddress)
+                    showGarageDialog = false
+                },
                 onDismiss = { showGarageDialog = false }
             )
         }
 
         if (showSettingsDialog) {
-            SettingsDialog(prefs = prefsManager, onDismiss = { showSettingsDialog = false })
+            SettingsDialog(
+                prefs = prefsManager,
+                onDismiss = { showSettingsDialog = false },
+                onShowTutorial = {
+                    showSettingsDialog = false
+                    showTutorialDialog = true
+                }
+            )
         }
 
         if (showTutorialDialog) {
@@ -343,7 +364,7 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
 }
 
 @Composable
-fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit) {
+fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: () -> Unit) {
     var isAppEnabled by remember { mutableStateOf(prefs.isAppEnabled()) }
     var isConnectionNotif by remember { mutableStateOf(prefs.isConnectionNotifEnabled()) }
     var isParkedNotif by remember { mutableStateOf(prefs.isParkedNotifEnabled()) }
@@ -370,6 +391,17 @@ fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit) {
                     Text(stringResource(R.string.notif_parked), color = TextWhite)
                     Switch(checked = isParkedNotif, onCheckedChange = { isParkedNotif = it; prefs.setParkedNotifEnabled(it) }, enabled = isAppEnabled, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
                 }
+
+                Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
+
+                // Bouton "Comment ça marche"
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onShowTutorial() }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(stringResource(R.string.settings_show_tuto), color = NeonBlue, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Icon(Icons.Rounded.HelpOutline, null, tint = NeonBlue)
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok), color = NeonBlue) } }
@@ -383,7 +415,7 @@ fun TutorialDialog(onDismiss: () -> Unit) {
         containerColor = DarkerSurface,
         title = { Text(stringResource(R.string.tuto_title), color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.tuto_intro), color = TextGrey, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(stringResource(R.string.tuto_step1), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
@@ -391,6 +423,17 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                 Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.tuto_step3), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
+
+                // Nouvelle section batterie
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Rounded.BatteryAlert, null, tint = ErrorRed, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(stringResource(R.string.tuto_battery_title), color = ErrorRed, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.tuto_battery_msg), color = TextGrey, fontSize = 14.sp)
+                    }
+                }
             }
         },
         confirmButton = { Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) { Text(stringResource(R.string.tuto_button), color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold) } }

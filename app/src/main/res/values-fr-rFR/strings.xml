@@ -45,6 +45,9 @@
     <string name="tuto_step1">1. Ouvrez le Menu \'Mon Garage\' et ajoutez votre voiture via Bluetooth.</string>
     <string name="tuto_step2">2. C\'est tout ! L\'appli enregistre votre position automatiquement quand le Bluetooth se déconnecte.</string>
     <string name="tuto_step3">3. Utilisez \'Y Aller\' pour retrouver votre véhicule.</string>
+    <string name="settings_show_tuto">Comment ça marche ?</string>
+    <string name="tuto_battery_title">Optimisation Batterie</string>
+    <string name="tuto_battery_msg">IMPORTANT : Pour que l\'application détecte automatiquement votre voiture en arrière-plan, veuillez désactiver l\'optimisation de la batterie pour CarLocator dans les paramètres de votre téléphone (Application > Batterie > Non restreint).</string>
     <string name="tuto_button">C\'est parti !</string>
 
     <string name="perm_gps_required">Permission GPS requise</string>
