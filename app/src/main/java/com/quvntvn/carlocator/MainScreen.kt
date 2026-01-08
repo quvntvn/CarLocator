@@ -234,9 +234,15 @@ fun MainScreen(db: AppDatabase) {
                         val newCar = CarLocation(macAddress = mac, name = name)
                         db.carDao().insertOrUpdateCar(newCar)
 
+                        // --- MODIFICATION ICI ---
+                        // 1. Sélectionner la nouvelle voiture
+                        selectedCar = newCar
+                        // 2. Fermer le dialogue
+                        showGarageDialog = false
+                        // ------------------------
+
                         checkCurrentConnection(context, listOf(newCar)) { connectedName ->
                             if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
-                                // CORRECTION ICI : Utilisation de l'action personnalisée
                                 val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
                                     action = "com.quvntvn.carlocator.ACTION_FORCE_CONNECT"
                                     putExtra(BluetoothDevice.EXTRA_DEVICE,
@@ -251,7 +257,7 @@ fun MainScreen(db: AppDatabase) {
                 onDeleteCar = { car ->
                     scope.launch {
                         db.carDao().deleteCar(car)
-                        // ACTUALISATION : Si la voiture supprimée est la sélectionnée, on reset la sélection
+                        // Si la voiture supprimée est la sélectionnée, on reset la sélection
                         if (selectedCar?.macAddress == car.macAddress) {
                             selectedCar = null
                         }
