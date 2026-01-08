@@ -55,9 +55,8 @@
 
         <service
             android:name=".ParkingService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location"
+            android:exported="false" />
 
     </application>
 

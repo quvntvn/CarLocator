@@ -459,24 +459,47 @@ fun saveCurrentLocation(context: Context, db: AppDatabase, scope: kotlinx.corout
     }
 }
 
-@SuppressLint("MissingPermission")
-fun checkCurrentConnection(context: Context, cars: List<CarLocation>, onResult: (String?) -> Unit) {
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    val adapter = bluetoothManager.adapter ?: return
-    if (!adapter.isEnabled) { onResult(null); return }
+// Dans MainScreen.kt
+
+@SuppressLint("MissingPermission") // S'assurer que la permission est vérifiée avant l'appel
+private fun checkCurrentConnection(
+    context: Context,
+    savedCars: List<CarLocation>,
+    onResult: (String?) -> Unit
+) {
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    val adapter = bluetoothManager?.adapter ?: return
+
+    if (!adapter.isEnabled) return
+
     val listener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             val connectedDevices = proxy.connectedDevices
             var foundName: String? = null
+
             for (device in connectedDevices) {
-                val car = cars.find { it.macAddress.equals(device.address, ignoreCase = true) }
-                if (car != null) { foundName = car.name; break }
+                // CORRECTION ICI : Utiliser ignoreCase = true
+                val car = savedCars.find {
+                    it.macAddress?.equals(device.address, ignoreCase = true) == true
+                }
+                if (car != null) {
+                    foundName = car.name
+                    break
+                }
             }
-            if (foundName != null) onResult(foundName)
+
+            if (foundName != null) {
+                onResult(foundName)
+            }
+
+            // On ferme le proxy pour éviter les fuites de mémoire
             adapter.closeProfileProxy(profile, proxy)
         }
+
         override fun onServiceDisconnected(profile: Int) {}
     }
+
+    // On vérifie les deux profils audio classiques (Audio et Téléphone)
     adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
     adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
 }
