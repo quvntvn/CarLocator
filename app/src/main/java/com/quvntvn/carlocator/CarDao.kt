@@ -5,20 +5,14 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.SkipQueryVerification // Important pour le bypass
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CarDao {
 
-    // On force l'utilisation de la table "car_location" (minuscules)
-    // Et on dit à Room de ne pas vérifier l'erreur à la compilation (@SkipQueryVerification)
-
-    @SkipQueryVerification
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
 
-    @SkipQueryVerification
     @Query("SELECT * FROM car_location WHERE macAddress = :macAddress LIMIT 1")
     suspend fun getCarByMac(macAddress: String): CarLocation?
 
@@ -28,6 +22,6 @@ interface CarDao {
     @Delete
     suspend fun deleteCar(car: CarLocation)
 
-    @Query("UPDATE car_location SET name = :newName WHERE macAddress = :mac")
-    suspend fun updateCarName(mac: String, newName: String)
+    @Query("UPDATE car_location SET name = :newName WHERE macAddress = :macAddress")
+    suspend fun updateCarName(macAddress: String, newName: String)
 }
