@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Car Locator</string>
+
+    <string name="menu_garage">Mon Garage</string>
+    <string name="settings">Paramètres</string>
+    <string name="close">Fermer</string>
+    <string name="back">Retour</string>
+    <string name="ok">OK</string>
+
+    <string name="add_car_title">Ajouter une voiture</string>
+    <string name="add_button">Ajouter</string>
+    <string name="no_cars">Aucune voiture enregistrée.</string>
+    <string name="parked_on">Garée : </string>
+    <string name="unknown_position">Position inconnue ou non garée.</string>
+    <string name="park_here">📍 Garer Ici</string>
+    <string name="go_to">Y Aller</string>
+    <string name="delete">Supprimer</string>
+    <string name="connected">Connecté</string>
+    <string name="disconnected">Déconnecté</string>
+    <string name="select_car">Sélectionnez une voiture</string>
+    <string name="car_parked_toast">garée !</string>
+
+    <string name="bt_disabled_title">Le Bluetooth est désactivé</string>
+    <string name="bt_disabled_msg">Veuillez l\'activer pour voir vos appareils.</string>
+    <string name="open_settings">Ouvrir les Paramètres</string>
+    <string name="refresh_bt">J\'ai activé le Bluetooth, rafraîchir</string>
+    <string name="select_device_instruction">Sélectionnez votre voiture dans la liste des appareils appairés :</string>
+    <string name="no_device_found">Aucun appareil trouvé. Vérifiez les réglages du téléphone.</string>
+
+    <string name="settings_title">Paramètres</string>
+    <string name="enable_app">Activer l\'application</string>
+    <string name="enable_app_desc">Désactiver pour tout arrêter</string>
+    <string name="notif_connection">Notif. Connexion</string>
+    <string name="notif_parked">Notif. Voiture Garée</string>
+
+    <string name="notif_channel_name">Événements Voiture</string>
+    <string name="notif_connected_title">Connecté à %1$s</string>
+    <string name="notif_connected_body">Bonne route !</string>
+    <string name="notif_parked_title">Voiture Garée</string>
+    <string name="notif_parked_body">Position enregistrée pour %1$s</string>
+
+    <string name="tuto_title">Bienvenue sur CarLocator ! 🚗</string>
+    <string name="tuto_intro">Voici comment utiliser l\'application :</string>
+    <string name="tuto_step1">1. Ouvrez le Menu \'Mon Garage\' et ajoutez votre voiture via Bluetooth.</string>
+    <string name="tuto_step2">2. C\'est tout ! L\'appli enregistre votre position automatiquement quand le Bluetooth se déconnecte.</string>
+    <string name="tuto_step3">3. Utilisez \'Y Aller\' pour retrouver votre véhicule.</string>
+    <string name="tuto_button">C\'est parti !</string>
+
+    <string name="perm_gps_required">Permission GPS requise</string>
+</resources>
