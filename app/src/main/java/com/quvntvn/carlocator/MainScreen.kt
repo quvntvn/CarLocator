@@ -36,7 +36,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource // IMPORTANT
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +51,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Couleurs
+// Couleurs thématiques
 val NeonBlue = Color(0xFF2979FF)
 val DeepBlack = Color(0xFF121212)
 val SurfaceBlack = Color(0xFF1E1E1E)
@@ -67,12 +67,12 @@ fun MainScreen(db: AppDatabase) {
     val scope = rememberCoroutineScope()
     val prefsManager = remember { PrefsManager(context) }
 
-    // États
+    // États des dialogues
     var showGarageDialog by remember { mutableStateOf(false) }
     var showTutorialDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    // Data
+    // Données de la DB
     val allCars by db.carDao().getAllCars().collectAsStateWithLifecycle(initialValue = emptyList())
     var connectedCarName by remember { mutableStateOf<String?>(null) }
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
@@ -81,7 +81,7 @@ fun MainScreen(db: AppDatabase) {
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { }
 
-    // Init
+    // Initialisation et Permissions
     LaunchedEffect(Unit) {
         if (prefsManager.isFirstLaunch()) showTutorialDialog = true
 
@@ -101,7 +101,7 @@ fun MainScreen(db: AppDatabase) {
 
     val currentCarsState = rememberUpdatedState(allCars)
 
-    // Receiver
+    // Écouteur Bluetooth pour l'état de connexion UI
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -131,7 +131,7 @@ fun MainScreen(db: AppDatabase) {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // Auto-select car
+    // Gestion de la sélection automatique au démarrage
     LaunchedEffect(allCars) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
@@ -141,7 +141,7 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
-    // Map Setup
+    // Configuration de la carte
     val hasLocationPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val cameraPositionState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(48.8566, 2.3522), 15f) }
 
@@ -153,7 +153,7 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
-    // --- UI ---
+    // --- INTERFACE PRINCIPALE ---
     Box(modifier = Modifier.fillMaxSize().background(DeepBlack)) {
 
         GoogleMap(
@@ -174,7 +174,7 @@ fun MainScreen(db: AppDatabase) {
             }
         }
 
-        // Top Menu
+        // Menu du haut (Garage & Paramètres)
         Box(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().fillMaxWidth().padding(top = 16.dp, start = 16.dp, end = 16.dp)) {
             TopMenuCard(
                 onGarageClick = { showGarageDialog = true },
@@ -182,7 +182,7 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
-        // Bottom Card
+        // Zone du bas (Bouton Position & Carte Voiture)
         Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp).fillMaxWidth()) {
             SmallFloatingButton(
                 icon = Icons.Rounded.MyLocation,
@@ -216,7 +216,7 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
-        // Dialogs
+        // Affichage des dialogues
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,
@@ -242,7 +242,7 @@ fun MainScreen(db: AppDatabase) {
     }
 }
 
-// --- COMPONENTS ---
+// --- COMPOSANTS UI ---
 
 @Composable
 fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
@@ -409,7 +409,6 @@ fun GarageDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-
     var showAddScreen by remember { mutableStateOf(false) }
     var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     var isBtEnabled by remember { mutableStateOf(isBluetoothEnabled(context)) }
@@ -417,6 +416,14 @@ fun GarageDialog(
     // État pour la modification du nom
     var carToRename by remember { mutableStateOf<CarLocation?>(null) }
     var newNameText by remember { mutableStateOf("") }
+
+    // Charger les appareils Bluetooth au passage à l'écran d'ajout
+    LaunchedEffect(showAddScreen) {
+        if (showAddScreen) {
+            isBtEnabled = isBluetoothEnabled(context)
+            if (isBtEnabled) scannedDevices = getBondedDevices(context)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -427,7 +434,37 @@ fun GarageDialog(
         },
         text = {
             if (showAddScreen) {
-                // ... (Ton code existant pour le scan Bluetooth reste le même) ...
+                Column {
+                    if (!isBtEnabled) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+                            Icon(Icons.Rounded.BluetoothDisabled, null, tint = ErrorRed, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(stringResource(R.string.bt_disabled_title), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(stringResource(R.string.bt_disabled_msg), color = TextGrey, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }, colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack)) { Text(stringResource(R.string.open_settings), color = TextWhite) }
+                            TextButton(onClick = { isBtEnabled = isBluetoothEnabled(context); if(isBtEnabled) scannedDevices = getBondedDevices(context) }) { Text(stringResource(R.string.refresh_bt), color = NeonBlue) }
+                        }
+                    } else {
+                        Text(stringResource(R.string.select_device_instruction), color = TextGrey, fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
+                        if (scannedDevices.isEmpty()) {
+                            Text(stringResource(R.string.no_device_found), color = TextGrey, fontSize = 14.sp)
+                        } else {
+                            LazyColumn(modifier = Modifier.height(250.dp)) {
+                                items(scannedDevices) { device ->
+                                    @SuppressLint("MissingPermission")
+                                    val name = device.name ?: device.address
+                                    Row(modifier = Modifier.fillMaxWidth().clickable { onAddCar(device.address, name); showAddScreen = false }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.Bluetooth, null, tint = NeonBlue)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(name, color = TextWhite, fontSize = 16.sp)
+                                    }
+                                    Divider(color = SurfaceBlack)
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
                 if (savedCars.isEmpty()) {
                     Text(stringResource(R.string.no_cars), color = TextGrey)
@@ -439,7 +476,7 @@ fun GarageDialog(
                                 isSelected = currentSelectedCar?.macAddress == car.macAddress,
                                 onClick = { onCarSelect(car) },
                                 onDelete = { onDeleteCar(car) },
-                                onRename = { // Ouvre le mini-dialogue de renommage
+                                onRename = {
                                     carToRename = car
                                     newNameText = car.name
                                 }
@@ -501,7 +538,7 @@ fun SavedCarItem(
     isSelected: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onRename: () -> Unit // Nouveau paramètre
+    onRename: () -> Unit
 ) {
     val backgroundColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else SurfaceBlack
     val borderColor = if (isSelected) NeonBlue else Color.Transparent
@@ -527,12 +564,10 @@ fun SavedCarItem(
             )
         }
 
-        // BOUTON RENOMMER (CRAYON)
         IconButton(onClick = onRename) {
             Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp))
         }
 
-        // BOUTON SUPPRIMER
         IconButton(onClick = onDelete) {
             Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp))
         }
@@ -541,9 +576,18 @@ fun SavedCarItem(
 
 @SuppressLint("MissingPermission")
 fun getBondedDevices(context: Context): List<BluetoothDevice> {
-    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    return manager.adapter?.bondedDevices?.toList() ?: emptyList()
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val adapter = bluetoothManager.adapter
+
+    // Vérifier les permissions sur Android 12+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+        return emptyList()
+    }
+
+    return adapter?.bondedDevices?.toList() ?: emptyList()
 }
+
 fun isBluetoothEnabled(context: Context): Boolean {
     val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     return manager.adapter?.isEnabled == true
