@@ -15,6 +15,8 @@ class PrefsManager(context: Context) {
         private const val KEY_APP_ENABLED = "app_enabled"
         private const val KEY_NOTIF_CONNECTION = "notif_connection"
         private const val KEY_NOTIF_PARKED = "notif_parked"
+
+        private const val KEY_SELECTED_CAR_MAC = "selected_car_mac"
     }
 
     fun isFirstLaunch(): Boolean = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
