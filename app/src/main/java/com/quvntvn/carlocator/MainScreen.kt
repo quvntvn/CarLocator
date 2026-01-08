@@ -223,6 +223,7 @@ fun MainScreen(db: AppDatabase) {
                 currentSelectedCar = selectedCar,
                 onAddCar = { mac, name -> scope.launch { db.carDao().insertOrUpdateCar(CarLocation(macAddress = mac, name = name)) } },
                 onDeleteCar = { car -> scope.launch { db.carDao().deleteCar(car); if (selectedCar == car) selectedCar = null } },
+                onRenameCar = { mac, newName -> scope.launch { db.carDao().updateCarName(mac, newName) } },
                 onCarSelect = { car -> selectedCar = car; showGarageDialog = false },
                 onDismiss = { showGarageDialog = false }
             )
@@ -403,12 +404,11 @@ fun GarageDialog(
     currentSelectedCar: CarLocation?,
     onAddCar: (String, String) -> Unit,
     onDeleteCar: (CarLocation) -> Unit,
+    onRenameCar: (String, String) -> Unit,
     onCarSelect: (CarLocation) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getDatabase(context) }
-    val scope = rememberCoroutineScope()
 
     var showAddScreen by remember { mutableStateOf(false) }
     var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
@@ -484,10 +484,8 @@ fun GarageDialog(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch {
-                        db.carDao().updateCarName(carToRename!!.macAddress, newNameText)
-                        carToRename = null
-                    }
+                    onRenameCar(carToRename!!.macAddress, newNameText)
+                    carToRename = null
                 }) { Text("Enregistrer", color = NeonBlue) }
             },
             dismissButton = {
