@@ -51,4 +51,9 @@
     <string name="tuto_button">C\'est parti !</string>
 
     <string name="perm_gps_required">Permission GPS requise</string>
+
+    <string name="cdm_pairing_cancelled">Association annulée</string>
+    <string name="cdm_pairing_error">Erreur d\'association : %1$s</string>
+    <string name="cdm_pairing_success">Voiture associée avec succès !</string>
+    <string name="cdm_perm_error">"Permission manquante pour la détection auto. Veuillez l'activer dans les réglages de l'app."</string>
 </resources>
