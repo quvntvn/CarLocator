@@ -106,14 +106,20 @@ fun MainScreen(db: AppDatabase) {
     @SuppressLint("MissingPermission")
     fun handleNewCar(mac: String, name: String) {
         scope.launch {
-            val newCar = CarLocation(macAddress = mac, name = name)
+            val normalizedMac = mac.uppercase(Locale.ROOT)
+            val normalizedName = if (name.isBlank()) {
+                "Ma Voiture (${normalizedMac.takeLast(4)})"
+            } else {
+                name
+            }
+            val newCar = CarLocation(macAddress = normalizedMac, name = normalizedName)
             db.carDao().insertOrUpdateCar(newCar)
 
             // 1. Activer la surveillance CDM
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
                     val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
-                    deviceManager.startObservingDevicePresence(mac)
+                    deviceManager.startObservingDevicePresence(normalizedMac)
                 } catch (e: Exception) {
                     // Ignorer si déjà surveillé
                 }
@@ -123,7 +129,7 @@ fun MainScreen(db: AppDatabase) {
             try {
                 val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
                 val adapter = bluetoothManager.adapter
-                val device = adapter.getRemoteDevice(mac)
+                val device = adapter.getRemoteDevice(normalizedMac)
 
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
                     Toast.makeText(context, "Demande d'appairage Bluetooth lancée...", Toast.LENGTH_LONG).show()
@@ -136,7 +142,7 @@ fun MainScreen(db: AppDatabase) {
             }
 
             selectedCar = newCar
-            prefsManager.saveLastSelectedCarMac(mac)
+            prefsManager.saveLastSelectedCarMac(normalizedMac)
             showGarageDialog = false
         }
     }
@@ -145,6 +151,9 @@ fun MainScreen(db: AppDatabase) {
     val associationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return@rememberLauncherForActivityResult
+        }
         if (result.resultCode == Activity.RESULT_OK) {
             val data = result.data
             val device: BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -156,7 +165,7 @@ fun MainScreen(db: AppDatabase) {
 
             device?.let {
                 @SuppressLint("MissingPermission")
-                val name = it.name ?: "Ma Voiture (${it.address.takeLast(4)})"
+                val name = it.name.orEmpty()
                 handleNewCar(it.address, name)
             }
         }
@@ -187,7 +196,7 @@ fun MainScreen(db: AppDatabase) {
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
                     val mac = associationInfo.deviceMacAddress?.toString()
                     if (mac != null) {
-                        handleNewCar(mac, "Ma Voiture (${mac.takeLast(4)})")
+                        handleNewCar(mac, "")
                     }
                 }
 
