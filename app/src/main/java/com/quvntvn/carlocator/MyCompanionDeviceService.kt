@@ -6,10 +6,13 @@ import android.companion.CompanionDeviceService
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 
+@RequiresApi(Build.VERSION_CODES.S)
 @SuppressLint("MissingPermission")
 class MyCompanionDeviceService : CompanionDeviceService() {
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture détectée (CDM) : ${associationInfo.deviceMacAddress}")
 
@@ -24,6 +27,7 @@ class MyCompanionDeviceService : CompanionDeviceService() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture perdue (CDM) : ${associationInfo.deviceMacAddress}")
 

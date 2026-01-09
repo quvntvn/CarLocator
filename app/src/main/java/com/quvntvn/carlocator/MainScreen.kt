@@ -2,6 +2,7 @@ package com.quvntvn.carlocator
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -19,7 +20,6 @@ import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -88,22 +86,76 @@ fun MainScreen(db: AppDatabase) {
     var connectedCarName by remember { mutableStateOf<String?>(null) }
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
 
+    // --- GESTION DE L'ASSOCIATION (Companion Device Manager) ---
+    val associationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            // Le résultat est géré dans le callback onAssociationCreated
+        }
+    }
+
+    fun startAssociationProcess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
+
+            // On veut voir TOUS les appareils Bluetooth pour que l'utilisateur choisisse sa voiture
+            // On ne met pas de filtre d'adresse spécifique ici, car on cherche une NOUVELLE voiture
+            val deviceFilter = BluetoothDeviceFilter.Builder()
+                // Tu pourrais ajouter .setNamePattern(Pattern.compile(".*")) si besoin
+                .build()
+
+            val pairingRequest = AssociationRequest.Builder()
+                .addDeviceFilter(deviceFilter)
+                .setSingleDevice(false)
+                .build()
+
+            deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+                override fun onAssociationPending(intentSender: IntentSender) {
+                    val intentSenderRequest = IntentSenderRequest.Builder(intentSender).build()
+                    associationLauncher.launch(intentSenderRequest)
+                }
+
+                override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                    scope.launch {
+                        val mac = associationInfo.deviceMacAddress?.toString() ?: return@launch
+                        // Par défaut on utilise l'adresse MAC comme nom, l'utilisateur pourra renommer
+                        val name = "Ma Voiture (${mac.takeLast(4)})"
+
+                        val newCar = CarLocation(macAddress = mac, name = name)
+                        db.carDao().insertOrUpdateCar(newCar)
+
+                        // IMPORTANT : Activer la surveillance
+                        try {
+                            deviceManager.startObservingDevicePresence(mac)
+                            Toast.makeText(context, "Voiture associée avec succès !", Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            // Ignorer si déjà surveillé
+                        }
+
+                        selectedCar = newCar
+                        prefsManager.saveLastSelectedCarMac(mac)
+                        showGarageDialog = false
+                    }
+                }
+
+                override fun onFailure(error: CharSequence?) {
+                    Toast.makeText(context, "Erreur : $error", Toast.LENGTH_SHORT).show()
+                }
+            }, null)
+        } else {
+            Toast.makeText(context, "Fonctionnalité non disponible sur cette version d'Android", Toast.LENGTH_SHORT).show()
+        }
+    }
+    // -----------------------------------------------------------
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { }
 
-    val associationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            Toast.makeText(context, context.getString(R.string.cdm_pairing_cancelled), Toast.LENGTH_SHORT).show()
-        }
-    }
-
     // Initialisation et Permissions
     LaunchedEffect(Unit) {
         if (prefsManager.isFirstLaunch()) showTutorialDialog = true
-
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -112,7 +164,6 @@ fun MainScreen(db: AppDatabase) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(perms.toTypedArray())
         }
@@ -134,7 +185,6 @@ fun MainScreen(db: AppDatabase) {
                 }
 
                 if (device != null) {
-                    // Utilisation de ignoreCase pour la comparaison MAC
                     val car = currentCarsState.value.find { it.macAddress.equals(device.address, ignoreCase = true) }
                     if (car != null) {
                         if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
@@ -159,15 +209,10 @@ fun MainScreen(db: AppDatabase) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
         }
-        // Logique de sélection intelligente
         if (allCars.isNotEmpty()) {
-            // Si aucune sélection ou sélection invalide
             if (selectedCar == null || allCars.none { it.macAddress == selectedCar?.macAddress }) {
-                // 1. Essayer de récupérer la dernière voiture sélectionnée sauvegardée
                 val lastMac = prefsManager.getLastSelectedCarMac()
                 val lastSavedCar = allCars.find { it.macAddress == lastMac }
-
-                // 2. Sinon priorité : Saved > Position connue > Première liste
                 selectedCar = lastSavedCar ?: allCars.find { it.latitude != null } ?: allCars.first()
             }
         } else {
@@ -175,7 +220,6 @@ fun MainScreen(db: AppDatabase) {
         }
     }
 
-    // Configuration de la carte
     val hasLocationPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val cameraPositionState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(48.8566, 2.3522), 15f) }
 
@@ -212,7 +256,6 @@ fun MainScreen(db: AppDatabase) {
             }
         }
 
-        // Menu du haut (Garage & Paramètres)
         Box(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().fillMaxWidth().padding(top = 16.dp, start = 16.dp, end = 16.dp)) {
             TopMenuCard(
                 onGarageClick = { showGarageDialog = true },
@@ -220,7 +263,6 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
-        // Zone du bas (Bouton Position & Carte Voiture)
         Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp).fillMaxWidth()) {
             SmallFloatingButton(
                 icon = Icons.Rounded.MyLocation,
@@ -254,47 +296,21 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
-        // Affichage des dialogues
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,
                 currentSelectedCar = selectedCar,
-                onAddCar = { mac, name ->
-                    scope.launch {
-                        val newCar = CarLocation(macAddress = mac, name = name)
-                        db.carDao().insertOrUpdateCar(newCar)
-
-                        // --- NOUVEAU : Association CDM ---
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            associateCar(context, mac, associationLauncher)
-                        }
-
-                        // Sélectionner la nouvelle voiture et sauvegarder
-                        selectedCar = newCar
-                        prefsManager.saveLastSelectedCarMac(mac)
-                        showGarageDialog = false
-
-                        checkCurrentConnection(context, listOf(newCar)) { connectedName ->
-                            if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
-                                val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
-                                    action = "com.quvntvn.carlocator.ACTION_FORCE_CONNECT"
-                                    putExtra(
-                                        BluetoothDevice.EXTRA_DEVICE,
-                                        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager)
-                                            .adapter.getRemoteDevice(mac)
-                                    )
-                                }
-                                context.sendBroadcast(intent)
-                            }
-                        }
-                    }
+                onAddCarClick = {
+                    // APPEL DIRECT AU PROCESSUS CDM
+                    startAssociationProcess()
                 },
                 onDeleteCar = { car ->
                     scope.launch {
                         db.carDao().deleteCar(car)
+                        // Note: Le système garde parfois l'association en cache, mais l'app ne réagira plus sans l'entrée en BDD
                         if (selectedCar?.macAddress == car.macAddress) {
                             selectedCar = null
-                            prefsManager.saveLastSelectedCarMac("") // Reset save
+                            prefsManager.saveLastSelectedCarMac("")
                         }
                     }
                 },
@@ -310,7 +326,7 @@ fun MainScreen(db: AppDatabase) {
 
         if (showSettingsDialog) {
             SettingsDialog(
-                context = context, // Passer le context ici
+                context = context,
                 prefs = prefsManager,
                 onDismiss = { showSettingsDialog = false },
                 onShowTutorial = {
@@ -329,7 +345,104 @@ fun MainScreen(db: AppDatabase) {
     }
 }
 
-// --- COMPOSANTS UI ---
+// --- COMPOSANTS UI ADAPTÉS ---
+
+@Composable
+fun GarageDialog(
+    savedCars: List<CarLocation>,
+    currentSelectedCar: CarLocation?,
+    onAddCarClick: () -> Unit, // Changé pour ne plus prendre d'arguments
+    onDeleteCar: (CarLocation) -> Unit,
+    onRenameCar: (String, String) -> Unit,
+    onCarSelect: (CarLocation) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Plus besoin d'états pour le scan manuel !
+    var carToRename by remember { mutableStateOf<CarLocation?>(null) }
+    var newNameText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkerSurface,
+        title = {
+            Text(stringResource(R.string.menu_garage), color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        },
+        text = {
+            Column {
+                if (savedCars.isEmpty()) {
+                    Text(stringResource(R.string.no_cars), color = TextGrey, modifier = Modifier.padding(bottom = 16.dp))
+                } else {
+                    LazyColumn(modifier = Modifier.height(250.dp)) {
+                        items(savedCars) { car ->
+                            SavedCarItem(
+                                car = car,
+                                isSelected = currentSelectedCar?.macAddress == car.macAddress,
+                                onClick = { onCarSelect(car) },
+                                onDelete = { onDeleteCar(car) },
+                                onRename = {
+                                    carToRename = car
+                                    newNameText = car.name
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Bouton unique pour l'association CDM
+                Button(
+                    onClick = onAddCarClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Add, null, tint = TextWhite)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.add_button), color = TextWhite)
+                }
+            }
+        },
+        confirmButton = {}, // Le bouton d'ajout est dans le contenu
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = TextGrey) }
+        }
+    )
+
+    if (carToRename != null) {
+        AlertDialog(
+            onDismissRequest = { carToRename = null },
+            containerColor = SurfaceBlack,
+            title = { Text(stringResource(R.string.settings_title), color = TextWhite) },
+            text = {
+                TextField(
+                    value = newNameText,
+                    onValueChange = { newNameText = it },
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedContainerColor = DarkerSurface,
+                        unfocusedContainerColor = DarkerSurface
+                    ),
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRenameCar(carToRename!!.macAddress, newNameText)
+                    carToRename = null
+                }) { Text(stringResource(R.string.ok), color = NeonBlue) }
+            },
+            dismissButton = {
+                TextButton(onClick = { carToRename = null }) { Text(stringResource(R.string.back), color = TextGrey) }
+            }
+        )
+    }
+}
+
+// Les autres fonctions (SavedCarItem, TopMenuCard, etc.) restent identiques à la version précédente.
+// Assure-toi d'inclure les imports et les autres composants (CarInfoCard, SettingsDialog, etc.) du fichier précédent.
+// ... (Copier-coller le reste des composants UI ici si nécessaire, ils ne changent pas)
 
 @Composable
 fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
@@ -417,12 +530,8 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                     Text(stringResource(R.string.notif_parked), color = TextWhite)
                     Switch(checked = isParkedNotif, onCheckedChange = { isParkedNotif = it; prefs.setParkedNotifEnabled(it) }, enabled = isAppEnabled, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
                 }
-
                 Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
-
-                // --- NOUVEAU : Section Fiabilité / Batterie ---
                 Text("Système", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
-
                 Button(
                     onClick = {
                         try {
@@ -443,10 +552,7 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Ouvrir réglages App (Batterie)", color = TextWhite)
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // Bouton "Comment ça marche"
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onShowTutorial() }.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -475,8 +581,6 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                 Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.tuto_step3), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
-
-                // Nouvelle section batterie
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.BatteryAlert, null, tint = ErrorRed, modifier = Modifier.size(24.dp))
@@ -511,9 +615,7 @@ fun saveCurrentLocation(context: Context, db: AppDatabase, scope: kotlinx.corout
     }
 }
 
-// Dans MainScreen.kt
-
-@SuppressLint("MissingPermission") // S'assurer que la permission est vérifiée avant l'appel
+@SuppressLint("MissingPermission")
 private fun checkCurrentConnection(
     context: Context,
     savedCars: List<CarLocation>,
@@ -521,280 +623,39 @@ private fun checkCurrentConnection(
 ) {
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     val adapter = bluetoothManager?.adapter ?: return
-
     if (!adapter.isEnabled) return
-
     val listener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             val connectedDevices = proxy.connectedDevices
             var foundName: String? = null
-
             for (device in connectedDevices) {
-                // CORRECTION ICI : Utiliser ignoreCase = true
-                val car = savedCars.find {
-                    it.macAddress?.equals(device.address, ignoreCase = true) == true
-                }
+                val car = savedCars.find { it.macAddress?.equals(device.address, ignoreCase = true) == true }
                 if (car != null) {
                     foundName = car.name
                     break
                 }
             }
-
-            if (foundName != null) {
-                onResult(foundName)
-            }
-
-            // On ferme le proxy pour éviter les fuites de mémoire
+            if (foundName != null) onResult(foundName)
             adapter.closeProfileProxy(profile, proxy)
         }
-
         override fun onServiceDisconnected(profile: Int) {}
     }
-
-    // On vérifie les deux profils audio classiques (Audio et Téléphone)
     adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
     adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
 }
 
 @Composable
-fun GarageDialog(
-    savedCars: List<CarLocation>,
-    currentSelectedCar: CarLocation?,
-    onAddCar: (String, String) -> Unit,
-    onDeleteCar: (CarLocation) -> Unit,
-    onRenameCar: (String, String) -> Unit,
-    onCarSelect: (CarLocation) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    var showAddScreen by remember { mutableStateOf(false) }
-    var scannedDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
-    var isBtEnabled by remember { mutableStateOf(isBluetoothEnabled(context)) }
-
-    // État pour la modification du nom
-    var carToRename by remember { mutableStateOf<CarLocation?>(null) }
-    var newNameText by remember { mutableStateOf("") }
-
-    LaunchedEffect(showAddScreen) {
-        if (showAddScreen) {
-            isBtEnabled = isBluetoothEnabled(context)
-            if (isBtEnabled) scannedDevices = getBondedDevices(context)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = DarkerSurface,
-        title = {
-            Text(if (showAddScreen) stringResource(R.string.add_car_title) else stringResource(R.string.menu_garage),
-                color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        },
-        text = {
-            if (showAddScreen) {
-                Column {
-                    if (!isBtEnabled) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-                            Icon(Icons.Rounded.BluetoothDisabled, null, tint = ErrorRed, modifier = Modifier.size(48.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(stringResource(R.string.bt_disabled_title), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text(stringResource(R.string.bt_disabled_msg), color = TextGrey, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }, colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack)) { Text(stringResource(R.string.open_settings), color = TextWhite) }
-                            TextButton(onClick = { isBtEnabled = isBluetoothEnabled(context); if(isBtEnabled) scannedDevices = getBondedDevices(context) }) { Text(stringResource(R.string.refresh_bt), color = NeonBlue) }
-                        }
-                    } else {
-                        Text(stringResource(R.string.select_device_instruction), color = TextGrey, fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
-                        if (scannedDevices.isEmpty()) {
-                            Text(stringResource(R.string.no_device_found), color = TextGrey, fontSize = 14.sp)
-                        } else {
-                            LazyColumn(modifier = Modifier.height(250.dp)) {
-                                items(scannedDevices) { device ->
-                                    @SuppressLint("MissingPermission")
-                                    val name = device.name ?: device.address
-                                    Row(modifier = Modifier.fillMaxWidth().clickable { onAddCar(device.address, name); showAddScreen = false }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Rounded.Bluetooth, null, tint = NeonBlue)
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(name, color = TextWhite, fontSize = 16.sp)
-                                    }
-                                    Divider(color = SurfaceBlack)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (savedCars.isEmpty()) {
-                    Text(stringResource(R.string.no_cars), color = TextGrey)
-                } else {
-                    LazyColumn(modifier = Modifier.height(250.dp)) {
-                        items(savedCars) { car ->
-                            SavedCarItem(
-                                car = car,
-                                isSelected = currentSelectedCar?.macAddress == car.macAddress,
-                                onClick = { onCarSelect(car) },
-                                onDelete = { onDeleteCar(car) },
-                                onRename = {
-                                    carToRename = car
-                                    newNameText = car.name
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (!showAddScreen) {
-                Button(onClick = { showAddScreen = true }, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) {
-                    Text(stringResource(R.string.add_button), color = TextWhite)
-                }
-            }
-        },
-        dismissButton = {
-            Button(onClick = { if (showAddScreen) showAddScreen = false else onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
-                Text(if (showAddScreen) stringResource(R.string.back) else stringResource(R.string.close), color = TextGrey)
-            }
-        }
-    )
-
-    if (carToRename != null) {
-        AlertDialog(
-            onDismissRequest = { carToRename = null },
-            containerColor = SurfaceBlack,
-            title = { Text(stringResource(R.string.settings_title), color = TextWhite) },
-            text = {
-                TextField(
-                    value = newNameText,
-                    onValueChange = { newNameText = it },
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedContainerColor = DarkerSurface,
-                        unfocusedContainerColor = DarkerSurface
-                    ),
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRenameCar(carToRename!!.macAddress, newNameText)
-                    carToRename = null
-                }) { Text(stringResource(R.string.ok), color = NeonBlue) }
-            },
-            dismissButton = {
-                TextButton(onClick = { carToRename = null }) { Text(stringResource(R.string.back), color = TextGrey) }
-            }
-        )
-    }
-}
-
-@Composable
-fun SavedCarItem(
-    car: CarLocation,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-    onRename: () -> Unit
-) {
+fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit) {
     val backgroundColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else SurfaceBlack
     val borderColor = if (isSelected) NeonBlue else Color.Transparent
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .background(backgroundColor, RoundedCornerShape(12.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(backgroundColor, RoundedCornerShape(12.dp)).border(1.dp, borderColor, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextWhite)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(car.name, fontWeight = FontWeight.Bold, color = TextWhite)
-            Text(
-                text = if(car.latitude != null) "${stringResource(R.string.parked_on)}${formatDate(car.timestamp)}" else stringResource(R.string.unknown_position),
-                style = MaterialTheme.typography.bodySmall,
-                color = TextGrey
-            )
+            Text(text = if(car.latitude != null) "${stringResource(R.string.parked_on)}${formatDate(car.timestamp)}" else stringResource(R.string.unknown_position), style = MaterialTheme.typography.bodySmall, color = TextGrey)
         }
-
-        IconButton(onClick = onRename) {
-            Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp))
-        }
-
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp))
-        }
+        IconButton(onClick = onRename) { Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp)) }
+        IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp)) }
     }
-}
-
-@SuppressLint("MissingPermission")
-fun getBondedDevices(context: Context): List<BluetoothDevice> {
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    val adapter = bluetoothManager.adapter
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-        ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-        return emptyList()
-    }
-
-    return adapter?.bondedDevices?.toList() ?: emptyList()
-}
-
-fun isBluetoothEnabled(context: Context): Boolean {
-    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    return manager.adapter?.isEnabled == true
-}
-
-@SuppressLint("NewApi", "MissingPermission")
-fun associateCar(
-    context: Context,
-    deviceMacAddress: String,
-    launcher: androidx.activity.result.ActivityResultLauncher<IntentSenderRequest>
-) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-
-    val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
-
-    val deviceFilter = BluetoothDeviceFilter.Builder().setAddress(deviceMacAddress).build()
-    val pairingRequest = AssociationRequest.Builder().addDeviceFilter(deviceFilter).setSingleDevice(false).build()
-
-    deviceManager.associate(pairingRequest,
-    object : CompanionDeviceManager.Callback() {
-
-        // Android 13+
-        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-        override fun onAssociationPending(intentSender: IntentSender) {
-            try {
-                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
-            } catch (e: Exception) {
-               Toast.makeText(context, context.getString(R.string.cdm_pairing_error, e.message), Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        // Android 8+ (déprécié)
-        override fun onDeviceFound(intentSender: IntentSender) {
-            try {
-                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
-            } catch (e: Exception) {
-                Toast.makeText(context, context.getString(R.string.cdm_pairing_error, e.message), Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onAssociationCreated(associationInfo: AssociationInfo) {
-            Toast.makeText(context, context.getString(R.string.cdm_pairing_success), Toast.LENGTH_SHORT).show()
-            try {
-                 deviceManager.startObservingDevicePresence(associationInfo.deviceMacAddress.toString())
-            } catch (e: SecurityException) {
-                Toast.makeText(context, context.getString(R.string.cdm_perm_error), Toast.LENGTH_LONG).show()
-
-            }
-        }
-
-        override fun onFailure(error: CharSequence?) {
-            Toast.makeText(context, context.getString(R.string.cdm_pairing_error, error), Toast.LENGTH_SHORT).show()
-        }
-    }, null)
 }
