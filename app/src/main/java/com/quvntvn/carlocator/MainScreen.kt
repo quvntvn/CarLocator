@@ -328,8 +328,10 @@ fun MainScreen(db: AppDatabase) {
                 onNavigateClick = {
                     selectedCar?.let { car ->
                         if (car.latitude != null) {
-                            val uri = Uri.parse("google.navigation:q=${car.latitude},${car.longitude}")
-                            context.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps"))
+                            // Utiliser "geo:" est plus standard pour proposer toutes les apps de cartes
+                            val uri = Uri.parse("geo:${car.latitude},${car.longitude}?q=${car.latitude},${car.longitude}(${car.name})")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                            context.startActivity(mapIntent)
                         }
                     }
                 }
