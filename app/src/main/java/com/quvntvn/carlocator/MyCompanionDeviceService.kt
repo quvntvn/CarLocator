@@ -4,8 +4,14 @@ import android.annotation.SuppressLint
 import android.companion.AssociationInfo
 import android.companion.CompanionDeviceService
 import android.content.Intent
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.location.Location
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -78,8 +84,49 @@ class MyCompanionDeviceService : CompanionDeviceService() {
             )
             carDao.insertOrUpdateCar(updatedCar)
             Log.d("CarLocator", "Position sauvegardée pour ${car.name} à [${location.latitude}, ${location.longitude}]")
+
+            // --- NOTIFICATION ---
+            val prefs = PrefsManager(applicationContext)
+            if (prefs.isParkedNotifEnabled()) {
+                sendNotification(
+                    applicationContext,
+                    getString(R.string.notif_parked_title),
+                    getString(R.string.notif_parked_body, car.name),
+                    car.macAddress
+                )
+            }
         } else {
             Log.w("CarLocator", "Aucune voiture trouvée en base pour l'adresse MAC : $macAddress")
         }
+    }
+
+    private fun sendNotification(context: Context, title: String, content: String, carAddress: String) {
+        val channelId = "car_locator_events"
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                context.getString(R.string.notif_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            manager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_menu_myplaces)
+            .setContentTitle(title)
+            .setContentText(content)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(carAddress.hashCode(), notification)
     }
 }
