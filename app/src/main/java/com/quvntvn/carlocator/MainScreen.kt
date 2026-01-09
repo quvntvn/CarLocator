@@ -5,10 +5,15 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -17,6 +22,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -117,6 +123,7 @@ fun MainScreen(db: AppDatabase) {
                 }
 
                 if (device != null) {
+                    // Utilisation de ignoreCase pour la comparaison MAC
                     val car = currentCarsState.value.find { it.macAddress.equals(device.address, ignoreCase = true) }
                     if (car != null) {
                         if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
@@ -285,6 +292,7 @@ fun MainScreen(db: AppDatabase) {
 
         if (showSettingsDialog) {
             SettingsDialog(
+                context = context, // Passer le context ici
                 prefs = prefsManager,
                 onDismiss = { showSettingsDialog = false },
                 onShowTutorial = {
@@ -364,7 +372,7 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
 }
 
 @Composable
-fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: () -> Unit) {
+fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: () -> Unit) {
     var isAppEnabled by remember { mutableStateOf(prefs.isAppEnabled()) }
     var isConnectionNotif by remember { mutableStateOf(prefs.isConnectionNotifEnabled()) }
     var isParkedNotif by remember { mutableStateOf(prefs.isParkedNotifEnabled()) }
@@ -393,6 +401,32 @@ fun SettingsDialog(prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: (
                 }
 
                 Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
+
+                // --- NOUVEAU : Section Fiabilité / Batterie ---
+                Text("Système", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+
+                Button(
+                    onClick = {
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Impossible d'ouvrir les réglages", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
+                ) {
+                    Icon(Icons.Rounded.SettingsSystemDaydream, null, tint = TextWhite)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ouvrir réglages App (Batterie)", color = TextWhite)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Bouton "Comment ça marche"
                 Row(
@@ -694,4 +728,43 @@ fun getBondedDevices(context: Context): List<BluetoothDevice> {
 fun isBluetoothEnabled(context: Context): Boolean {
     val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     return manager.adapter?.isEnabled == true
+}
+
+@SuppressLint("NewApi") // Fonction à utiliser plus tard avec CDM
+fun associateCar(context: Context, deviceMacAddress: String) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+    val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
+
+    // On crée un filtre pour trouver spécifiquement NOTRE voiture
+    val deviceFilter = BluetoothDeviceFilter.Builder()
+        .setAddress(deviceMacAddress)
+        .build()
+
+    val pairingRequest = AssociationRequest.Builder()
+        .addDeviceFilter(deviceFilter)
+        // Important : cela permet de surveiller la présence même app fermée
+        .setSingleDevice(false)
+        .build()
+
+    // Ceci va ouvrir une pop-up système demandant à l'utilisateur de confirmer
+    deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+        override fun onAssociationPending(intentSender: IntentSender) {
+            // Lancer l'intentSender pour afficher la pop-up à l'utilisateur
+            // (Nécessite startIntentSenderForResult dans l'Activity)
+        }
+
+        @RequiresPermission(Manifest.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE)
+        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+            // C'est BON ! L'association est créée.
+            // Maintenant Android surveillera cet appareil pour toujours.
+
+            // IMPORTANT : Activer la surveillance
+            deviceManager.startObservingDevicePresence(associationInfo.deviceMacAddress.toString())
+        }
+
+        override fun onFailure(error: CharSequence?) {
+            // Erreur
+        }
+    }, null)
 }

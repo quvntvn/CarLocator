@@ -42,7 +42,7 @@ class ParkingService : Service() {
         } else {
             stopSelf()
         }
-        return START_NOT_STICKY
+        return START_REDELIVER_INTENT
     }
 
     private fun startForegroundWithNotification() {
