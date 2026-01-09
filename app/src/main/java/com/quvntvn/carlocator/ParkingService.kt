@@ -45,7 +45,7 @@ class ParkingService : Service() {
         }
 
         serviceScope.launch {
-            val db = AppDatabase.getDatabase(applicationContext)
+            val db = AppDatabase.getInstance(applicationContext)
             car = db.carDao().getCarByMac(macAddress)
 
             if (car == null) {
@@ -85,7 +85,7 @@ class ParkingService : Service() {
         val location = tracker.getLocation()
 
         if (location != null) {
-            val db = AppDatabase.getDatabase(applicationContext)
+            val db = AppDatabase.getInstance(applicationContext)
             val updatedCar = car!!.copy(
                 latitude = location.latitude,
                 longitude = location.longitude,

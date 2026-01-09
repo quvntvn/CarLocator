@@ -55,7 +55,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             lastProcessedAction = intentAction
             lastProcessedTime = currentTime
 
-            val database = AppDatabase.getDatabase(context)
+            val database = AppDatabase.getInstance(context)
             val dao = database.carDao()
 
             CoroutineScope(Dispatchers.IO).launch {
