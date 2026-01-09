@@ -17,8 +17,8 @@ class MyCompanionDeviceService : CompanionDeviceService() {
         Log.d("CarLocator", "Voiture détectée (CDM) : ${associationInfo.deviceMacAddress}")
 
         val serviceIntent = Intent(this, ParkingService::class.java).apply {
-            action = "ACTION_CONNECTED"
-            putExtra("EXTRA_MAC_ADDRESS", associationInfo.deviceMacAddress?.toString())
+            action = ParkingService.ACTION_CONNECTED
+            putExtra(ParkingService.EXTRA_MAC_ADDRESS, associationInfo.deviceMacAddress?.toString())
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -32,8 +32,8 @@ class MyCompanionDeviceService : CompanionDeviceService() {
         Log.d("CarLocator", "Voiture perdue (CDM) : ${associationInfo.deviceMacAddress}")
 
         val serviceIntent = Intent(this, ParkingService::class.java).apply {
-            action = "ACTION_DISCONNECTED"
-            putExtra("EXTRA_MAC_ADDRESS", associationInfo.deviceMacAddress?.toString())
+            action = ParkingService.ACTION_DISCONNECTED
+            putExtra(ParkingService.EXTRA_MAC_ADDRESS, associationInfo.deviceMacAddress?.toString())
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)

@@ -73,16 +73,6 @@
             </intent-filter>
         </service>
 
-        <service
-            android:name=".CarCompanionService"
-            android:label="Car Locator Detector"
-            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.companion.CompanionDeviceService" />
-            </intent-filter>
-        </service>
-
     </application>
 
 </manifest>
