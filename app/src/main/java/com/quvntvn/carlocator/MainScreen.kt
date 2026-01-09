@@ -90,6 +90,7 @@ fun MainScreen(db: AppDatabase) {
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
 
     // --- LOGIQUE COMMUNE D'AJOUT ---
+    @RequiresApi(Build.VERSION_CODES.S)
     @SuppressLint("MissingPermission")
     fun handleNewCar(mac: String, name: String) {
         scope.launch {
@@ -172,6 +173,7 @@ fun MainScreen(db: AppDatabase) {
                     associationLauncher.launch(intentSenderRequest)
                 }
 
+                @RequiresApi(Build.VERSION_CODES.TIRAMISU)
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
                     // Pour Android 13+ (API 33+)
                     val mac = associationInfo.deviceMacAddress?.toString()
