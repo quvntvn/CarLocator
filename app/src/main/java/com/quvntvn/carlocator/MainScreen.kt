@@ -59,6 +59,7 @@ import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.regex.Pattern
 
 // Couleurs thématiques
 val NeonBlue = Color(0xFF2979FF)
@@ -90,8 +91,8 @@ fun MainScreen(db: AppDatabase) {
     val associationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            // Le résultat est géré dans le callback onAssociationCreated
+        if (result.resultCode != Activity.RESULT_OK) {
+            Toast.makeText(context, "Association annulée", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -99,16 +100,18 @@ fun MainScreen(db: AppDatabase) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
 
-            // On veut voir TOUS les appareils Bluetooth pour que l'utilisateur choisisse sa voiture
-            // On ne met pas de filtre d'adresse spécifique ici, car on cherche une NOUVELLE voiture
+            // Correction : Utiliser un filtre regex ".*" pour tout voir et forcer le scan classique
             val deviceFilter = BluetoothDeviceFilter.Builder()
-                // Tu pourrais ajouter .setNamePattern(Pattern.compile(".*")) si besoin
+                .setNamePattern(Pattern.compile(".*"))
                 .build()
 
             val pairingRequest = AssociationRequest.Builder()
                 .addDeviceFilter(deviceFilter)
                 .setSingleDevice(false)
                 .build()
+
+            // Toast pour prévenir l'utilisateur avant l'ouverture
+            Toast.makeText(context, "Recherche d'appareils... Veuillez patienter", Toast.LENGTH_SHORT).show()
 
             deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
                 override fun onAssociationPending(intentSender: IntentSender) {
@@ -119,18 +122,18 @@ fun MainScreen(db: AppDatabase) {
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
                     scope.launch {
                         val mac = associationInfo.deviceMacAddress?.toString() ?: return@launch
-                        // Par défaut on utilise l'adresse MAC comme nom, l'utilisateur pourra renommer
+                        // Nom par défaut, l'utilisateur pourra renommer
                         val name = "Ma Voiture (${mac.takeLast(4)})"
 
                         val newCar = CarLocation(macAddress = mac, name = name)
                         db.carDao().insertOrUpdateCar(newCar)
 
-                        // IMPORTANT : Activer la surveillance
+                        // Activer la surveillance
                         try {
                             deviceManager.startObservingDevicePresence(mac)
-                            Toast.makeText(context, "Voiture associée avec succès !", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Voiture associée ! Connexion en attente...", Toast.LENGTH_LONG).show()
                         } catch (e: Exception) {
-                            // Ignorer si déjà surveillé
+                            // Déjà surveillé
                         }
 
                         selectedCar = newCar
@@ -301,13 +304,11 @@ fun MainScreen(db: AppDatabase) {
                 savedCars = allCars,
                 currentSelectedCar = selectedCar,
                 onAddCarClick = {
-                    // APPEL DIRECT AU PROCESSUS CDM
                     startAssociationProcess()
                 },
                 onDeleteCar = { car ->
                     scope.launch {
                         db.carDao().deleteCar(car)
-                        // Note: Le système garde parfois l'association en cache, mais l'app ne réagira plus sans l'entrée en BDD
                         if (selectedCar?.macAddress == car.macAddress) {
                             selectedCar = null
                             prefsManager.saveLastSelectedCarMac("")
@@ -351,13 +352,12 @@ fun MainScreen(db: AppDatabase) {
 fun GarageDialog(
     savedCars: List<CarLocation>,
     currentSelectedCar: CarLocation?,
-    onAddCarClick: () -> Unit, // Changé pour ne plus prendre d'arguments
+    onAddCarClick: () -> Unit,
     onDeleteCar: (CarLocation) -> Unit,
     onRenameCar: (String, String) -> Unit,
     onCarSelect: (CarLocation) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Plus besoin d'états pour le scan manuel !
     var carToRename by remember { mutableStateOf<CarLocation?>(null) }
     var newNameText by remember { mutableStateOf("") }
 
@@ -372,7 +372,7 @@ fun GarageDialog(
                 if (savedCars.isEmpty()) {
                     Text(stringResource(R.string.no_cars), color = TextGrey, modifier = Modifier.padding(bottom = 16.dp))
                 } else {
-                    LazyColumn(modifier = Modifier.height(250.dp)) {
+                    LazyColumn(modifier = Modifier.height(200.dp)) {
                         items(savedCars) { car ->
                             SavedCarItem(
                                 car = car,
@@ -390,7 +390,23 @@ fun GarageDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Bouton unique pour l'association CDM
+                // --- EXPLICATION AJOUTÉE ---
+                Surface(
+                    color = SurfaceBlack,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Rounded.Info, null, tint = NeonBlue, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Pour que la détection fonctionne en arrière-plan, vous devez associer votre véhicule via la fenêtre système qui va s'ouvrir.",
+                            color = TextGrey,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
                 Button(
                     onClick = onAddCarClick,
                     colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
@@ -403,7 +419,7 @@ fun GarageDialog(
                 }
             }
         },
-        confirmButton = {}, // Le bouton d'ajout est dans le contenu
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = TextGrey) }
         }
@@ -440,9 +456,44 @@ fun GarageDialog(
     }
 }
 
-// Les autres fonctions (SavedCarItem, TopMenuCard, etc.) restent identiques à la version précédente.
-// Assure-toi d'inclure les imports et les autres composants (CarInfoCard, SettingsDialog, etc.) du fichier précédent.
-// ... (Copier-coller le reste des composants UI ici si nécessaire, ils ne changent pas)
+@Composable
+fun TutorialDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkerSurface,
+        title = { Text(stringResource(R.string.tuto_title), color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.tuto_intro), color = TextGrey, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Étape 1 enrichie
+                Text("1. Ajoutez votre voiture", color = NeonBlue, fontWeight = FontWeight.Bold)
+                Text("Cliquez sur le Garage, puis 'Ajouter'. Une fenêtre système s'ouvrira : sélectionnez votre appareil Bluetooth ici pour l'autoriser à réveiller l'application.", color = TextWhite, fontSize = 14.sp)
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(stringResource(R.string.tuto_step3), color = TextWhite, fontSize = 14.sp)
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Rounded.BatteryAlert, null, tint = ErrorRed, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(stringResource(R.string.tuto_battery_title), color = ErrorRed, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.tuto_battery_msg), color = TextGrey, fontSize = 13.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) { Text(stringResource(R.string.tuto_button), color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold) } }
+    )
+}
+
+// Les autres composants UI (TopMenuCard, CarInfoCard, SettingsDialog, SavedCarItem, SmallFloatingButton)
+// restent inchangés par rapport au fichier précédent.
+// Copiez-les ici pour compléter le fichier.
 
 @Composable
 fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
@@ -567,36 +618,6 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
 }
 
 @Composable
-fun TutorialDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = DarkerSurface,
-        title = { Text(stringResource(R.string.tuto_title), color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.tuto_intro), color = TextGrey, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(stringResource(R.string.tuto_step1), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(stringResource(R.string.tuto_step3), color = TextWhite, fontSize = 16.sp, lineHeight = 24.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Rounded.BatteryAlert, null, tint = ErrorRed, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(stringResource(R.string.tuto_battery_title), color = ErrorRed, fontWeight = FontWeight.Bold)
-                        Text(stringResource(R.string.tuto_battery_msg), color = TextGrey, fontSize = 14.sp)
-                    }
-                }
-            }
-        },
-        confirmButton = { Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = NeonBlue)) { Text(stringResource(R.string.tuto_button), color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold) } }
-    )
-}
-
-@Composable
 fun SmallFloatingButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     FloatingActionButton(onClick = onClick, modifier = modifier.size(48.dp), containerColor = SurfaceBlack, contentColor = TextWhite, shape = CircleShape) { Icon(icon, null, modifier = Modifier.size(20.dp)) }
 }
@@ -658,4 +679,16 @@ fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onD
         IconButton(onClick = onRename) { Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp)) }
         IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp)) }
     }
+}
+
+@SuppressLint("MissingPermission")
+fun getBondedDevices(context: Context): List<BluetoothDevice> {
+    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return emptyList()
+    return bluetoothManager.adapter?.bondedDevices?.toList() ?: emptyList()
+}
+
+fun isBluetoothEnabled(context: Context): Boolean {
+    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    return manager.adapter?.isEnabled == true
 }
