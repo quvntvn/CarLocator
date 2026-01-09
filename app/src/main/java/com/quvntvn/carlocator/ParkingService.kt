@@ -18,12 +18,17 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ParkingService : Service() {
 
+    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private var car: CarLocation? = null
+
     companion object {
-        const val ACTION_START = "com.quvntvn.carlocator.ACTION_START"
-        const val EXTRA_CAR_ADDRESS = "com.quvntvn.carlocator.EXTRA_CAR_ADDRESS"
+        const val ACTION_CONNECTED = "ACTION_CONNECTED"
+        const val ACTION_DISCONNECTED = "ACTION_DISCONNECTED"
+        const val EXTRA_MAC_ADDRESS = "EXTRA_MAC_ADDRESS"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "parking_service_channel"
     }
@@ -31,18 +36,77 @@ class ParkingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_START) {
-            val carAddress = intent.getStringExtra(EXTRA_CAR_ADDRESS)
-            if (carAddress != null) {
-                startForegroundWithNotification()
-                processParking(carAddress)
-            } else {
-                stopSelf()
+        val action = intent?.action
+        val macAddress = intent?.getStringExtra(EXTRA_MAC_ADDRESS)
+
+        if (macAddress == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        serviceScope.launch {
+            val db = AppDatabase.getDatabase(applicationContext)
+            car = db.carDao().getCarByMac(macAddress)
+
+            if (car == null) {
+                withContext(Dispatchers.Main) {
+                    stopSelf()
+                }
+                return@launch
             }
-        } else {
+
+            when (action) {
+                ACTION_CONNECTED -> handleConnection()
+                ACTION_DISCONNECTED -> handleDisconnection()
+            }
+        }
+
+        return START_REDELIVER_INTENT
+    }
+
+    private fun handleConnection() {
+        val prefs = PrefsManager(applicationContext)
+        if (prefs.isConnectionNotifEnabled()) {
+            sendNotification(
+                context = this,
+                title = getString(R.string.notif_connected_title, car!!.name),
+                content = getString(R.string.notif_connected_body),
+                notificationId = car!!.macAddress.hashCode()
+            )
+        }
+        stopSelf()
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun handleDisconnection() {
+        startForegroundWithNotification()
+
+        val tracker = GpsTracker(this)
+        val location = tracker.getLocation()
+
+        if (location != null) {
+            val db = AppDatabase.getDatabase(applicationContext)
+            val updatedCar = car!!.copy(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                timestamp = System.currentTimeMillis()
+            )
+            db.carDao().insertOrUpdateCar(updatedCar)
+
+            val prefs = PrefsManager(applicationContext)
+            if (prefs.isParkedNotifEnabled()) {
+                sendNotification(
+                    context = this,
+                    title = getString(R.string.notif_parked_title),
+                    content = getString(R.string.notif_parked_body, car!!.name),
+                    notificationId = car!!.macAddress.hashCode()
+                )
+            }
+        }
+
+        withContext(Dispatchers.Main) {
             stopSelf()
         }
-        return START_REDELIVER_INTENT
     }
 
     private fun startForegroundWithNotification() {
@@ -58,62 +122,11 @@ class ParkingService : Service() {
             this,
             NOTIFICATION_ID,
             notification,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            } else {
-                0
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
         )
     }
 
-    @SuppressLint("MissingPermission")
-    private fun processParking(carAddress: String) {
-        val prefs = PrefsManager(this)
-        val dao = AppDatabase.getDatabase(this).carDao()
-
-        CoroutineScope(Dispatchers.IO).launch {
-            val car = dao.getCarByMac(carAddress)
-            if (car == null) {
-                stopSelf()
-                return@launch
-            }
-
-            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this@ParkingService)
-            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                .addOnSuccessListener { location ->
-                    location?.let {
-                        saveParking(this@ParkingService, dao, car, it.latitude, it.longitude, prefs)
-                    }
-                    stopSelf()
-                }
-                .addOnFailureListener {
-                    // Fallback to last known location
-                    fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
-                        lastLocation?.let {
-                            saveParking(this@ParkingService, dao, car, it.latitude, it.longitude, prefs)
-                        }
-                        stopSelf()
-                    }
-                }
-        }
-    }
-
-    private fun saveParking(context: Context, dao: CarDao, car: CarLocation, lat: Double, lon: Double, prefs: PrefsManager) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val updatedCar = car.copy(latitude = lat, longitude = lon, timestamp = System.currentTimeMillis())
-            dao.insertOrUpdateCar(updatedCar)
-            prefs.saveCarLocation(lat, lon)
-
-            if (prefs.isParkedNotifEnabled()) {
-                sendNotification(context,
-                    context.getString(R.string.notif_parked_title),
-                    context.getString(R.string.notif_parked_body, car.name),
-                    car.macAddress)
-            }
-        }
-    }
-
-    private fun sendNotification(context: Context, title: String, content: String, carAddress: String) {
+    private fun sendNotification(context: Context, title: String, content: String, notificationId: Int) {
         val channelId = "car_locator_events"
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -140,7 +153,7 @@ class ParkingService : Service() {
             .setAutoCancel(true)
             .build()
 
-        manager.notify(carAddress.hashCode(), notification)
+        manager.notify(notificationId, notification)
     }
 
     private fun createNotificationChannel() {

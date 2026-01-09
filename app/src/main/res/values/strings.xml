@@ -54,4 +54,8 @@
 
 
     <string name="perm_gps_required">GPS Permission required</string>
+    <string name="cdm_pairing_cancelled">Pairing cancelled</string>
+    <string name="cdm_pairing_error">Pairing failed: %1$s</string>
+    <string name="cdm_pairing_success">Car associated successfully!</string>
+    <string name="cdm_perm_error">"Permission missing to auto-detect. Please grant it in the app's settings."</string>
 </resources>
