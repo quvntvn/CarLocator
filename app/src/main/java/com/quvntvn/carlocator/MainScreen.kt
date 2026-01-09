@@ -19,8 +19,10 @@ import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.background
@@ -88,6 +90,14 @@ fun MainScreen(db: AppDatabase) {
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { }
+
+    val associationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
+            Toast.makeText(context, context.getString(R.string.cdm_pairing_cancelled), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Initialisation et Permissions
     LaunchedEffect(Unit) {
@@ -253,6 +263,11 @@ fun MainScreen(db: AppDatabase) {
                         val newCar = CarLocation(macAddress = mac, name = name)
                         db.carDao().insertOrUpdateCar(newCar)
 
+                        // --- NOUVEAU : Association CDM ---
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            associateCar(context, mac, associationLauncher)
+                        }
+
                         // Sélectionner la nouvelle voiture et sauvegarder
                         selectedCar = newCar
                         prefsManager.saveLastSelectedCarMac(mac)
@@ -262,9 +277,11 @@ fun MainScreen(db: AppDatabase) {
                             if (connectedName != null && prefsManager.isConnectionNotifEnabled()) {
                                 val intent = Intent(context, CarBluetoothReceiver::class.java).apply {
                                     action = "com.quvntvn.carlocator.ACTION_FORCE_CONNECT"
-                                    putExtra(BluetoothDevice.EXTRA_DEVICE,
+                                    putExtra(
+                                        BluetoothDevice.EXTRA_DEVICE,
                                         (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager)
-                                            .adapter.getRemoteDevice(mac))
+                                            .adapter.getRemoteDevice(mac)
+                                    )
                                 }
                                 context.sendBroadcast(intent)
                             }
@@ -730,41 +747,53 @@ fun isBluetoothEnabled(context: Context): Boolean {
     return manager.adapter?.isEnabled == true
 }
 
-@SuppressLint("NewApi") // Fonction à utiliser plus tard avec CDM
-fun associateCar(context: Context, deviceMacAddress: String) {
+@SuppressLint("NewApi", "MissingPermission")
+fun associateCar(
+    context: Context,
+    deviceMacAddress: String,
+    launcher: androidx.activity.result.ActivityResultLauncher<IntentSenderRequest>
+) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
     val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
 
-    // On crée un filtre pour trouver spécifiquement NOTRE voiture
-    val deviceFilter = BluetoothDeviceFilter.Builder()
-        .setAddress(deviceMacAddress)
-        .build()
+    val deviceFilter = BluetoothDeviceFilter.Builder().setAddress(deviceMacAddress).build()
+    val pairingRequest = AssociationRequest.Builder().addDeviceFilter(deviceFilter).setSingleDevice(false).build()
 
-    val pairingRequest = AssociationRequest.Builder()
-        .addDeviceFilter(deviceFilter)
-        // Important : cela permet de surveiller la présence même app fermée
-        .setSingleDevice(false)
-        .build()
+    deviceManager.associate(pairingRequest,
+    object : CompanionDeviceManager.Callback() {
 
-    // Ceci va ouvrir une pop-up système demandant à l'utilisateur de confirmer
-    deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+        // Android 13+
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onAssociationPending(intentSender: IntentSender) {
-            // Lancer l'intentSender pour afficher la pop-up à l'utilisateur
-            // (Nécessite startIntentSenderForResult dans l'Activity)
+            try {
+                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
+            } catch (e: Exception) {
+               Toast.makeText(context, context.getString(R.string.cdm_pairing_error, e.message), Toast.LENGTH_SHORT).show()
+            }
         }
 
-        @RequiresPermission(Manifest.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE)
-        override fun onAssociationCreated(associationInfo: AssociationInfo) {
-            // C'est BON ! L'association est créée.
-            // Maintenant Android surveillera cet appareil pour toujours.
+        // Android 8+ (déprécié)
+        override fun onDeviceFound(intentSender: IntentSender) {
+            try {
+                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
+            } catch (e: Exception) {
+                Toast.makeText(context, context.getString(R.string.cdm_pairing_error, e.message), Toast.LENGTH_SHORT).show()
+            }
+        }
 
-            // IMPORTANT : Activer la surveillance
-            deviceManager.startObservingDevicePresence(associationInfo.deviceMacAddress.toString())
+        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+            Toast.makeText(context, context.getString(R.string.cdm_pairing_success), Toast.LENGTH_SHORT).show()
+            try {
+                 deviceManager.startObservingDevicePresence(associationInfo.deviceMacAddress.toString())
+            } catch (e: SecurityException) {
+                Toast.makeText(context, context.getString(R.string.cdm_perm_error), Toast.LENGTH_LONG).show()
+
+            }
         }
 
         override fun onFailure(error: CharSequence?) {
-            // Erreur
+            Toast.makeText(context, context.getString(R.string.cdm_pairing_error, error), Toast.LENGTH_SHORT).show()
         }
     }, null)
 }
