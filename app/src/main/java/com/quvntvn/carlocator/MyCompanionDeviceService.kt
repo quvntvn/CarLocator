@@ -4,9 +4,6 @@ import android.annotation.SuppressLint
 import android.companion.AssociationInfo
 import android.companion.CompanionDeviceService
 import android.content.Intent
-import android.companion.AssociationInfo
-import android.companion.CompanionDeviceService
-import android.content.Intent
 import android.os.Build
 import android.util.Log
 
