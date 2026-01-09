@@ -4,9 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.quvntvn.carlocator.CarLocation // <-- Vérifie cet import
 
-@Database(entities = [CarLocation::class], version = 2) // Change 1 par 2 ici
+@Database(entities = [CarLocation::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun carDao(): CarDao
 
@@ -14,13 +13,17 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        fun getDatabase(context: Context): AppDatabase {
+        fun getInstance(context: Context): AppDatabase {
+            // Si l'instance existe déjà, on la retourne
             return INSTANCE ?: synchronized(this) {
-                val instance = androidx.room.Room.databaseBuilder(
+                // Sinon on la crée (protection multi-thread)
+                val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "car_database"
-                ).build()
+                    "car_locator_database"
+                )
+                    .fallbackToDestructiveMigration() // Optionnel : recrée la DB si on change la structure
+                    .build()
                 INSTANCE = instance
                 instance
             }

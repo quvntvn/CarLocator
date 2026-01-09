@@ -26,6 +26,7 @@ class CarCompanionService : CompanionDeviceService() {
         ContextCompat.startForegroundService(this, intent)
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
         // LA VOITURE VIENT DE PARTIR !
         Log.d("CarLocator", "Voiture déconnectée (Système) !")
