@@ -20,12 +20,14 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,10 +86,20 @@ fun MainScreen(db: AppDatabase) {
     var showTutorialDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
+    // État optimisation batterie (Safety Check)
+    val isBatteryOptimized = remember { mutableStateOf(false) }
+
     // Données de la DB
     val allCars by db.carDao().getAllCars().collectAsStateWithLifecycle(initialValue = emptyList())
     var connectedCarName by remember { mutableStateOf<String?>(null) }
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
+
+    // Vérification batterie au lancement
+    LaunchedEffect(Unit) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        // Renvoie true si l'optimisation est active (mauvais pour nous)
+        isBatteryOptimized.value = !pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
 
     // --- LOGIQUE COMMUNE D'AJOUT ---
     @RequiresApi(Build.VERSION_CODES.S)
@@ -115,7 +127,7 @@ fun MainScreen(db: AppDatabase) {
 
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
                     Toast.makeText(context, "Demande d'appairage Bluetooth lancée...", Toast.LENGTH_LONG).show()
-                    device.createBond() // Ceci va ouvrir la pop-up "Code PIN" ou "Associer"
+                    device.createBond()
                 } else {
                     Toast.makeText(context, "Appareil déjà appairé et prêt !", Toast.LENGTH_SHORT).show()
                 }
@@ -134,7 +146,6 @@ fun MainScreen(db: AppDatabase) {
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            // Pour les anciennes versions d'Android (ou compatibilité), on récupère l'appareil ici
             val data = result.data
             val device: BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -155,7 +166,6 @@ fun MainScreen(db: AppDatabase) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
 
-            // Filtre "Tout voir" pour être sûr de trouver l'appareil
             val deviceFilter = BluetoothDeviceFilter.Builder()
                 .setNamePattern(Pattern.compile(".*"))
                 .build()
@@ -175,7 +185,6 @@ fun MainScreen(db: AppDatabase) {
 
                 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                    // Pour Android 13+ (API 33+)
                     val mac = associationInfo.deviceMacAddress?.toString()
                     if (mac != null) {
                         handleNewCar(mac, "Ma Voiture (${mac.takeLast(4)})")
@@ -241,7 +250,6 @@ fun MainScreen(db: AppDatabase) {
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-            // On écoute aussi le changement d'état d'appairage pour feedback
             addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         }
         context.registerReceiver(receiver, filter)
@@ -251,8 +259,6 @@ fun MainScreen(db: AppDatabase) {
     LaunchedEffect(allCars) {
         if (allCars.isNotEmpty()) {
             checkCurrentConnection(context, allCars) { name -> if (name != null) connectedCarName = name }
-        }
-        if (allCars.isNotEmpty()) {
             if (selectedCar == null || allCars.none { it.macAddress == selectedCar?.macAddress }) {
                 val lastMac = prefsManager.getLastSelectedCarMac()
                 val lastSavedCar = allCars.find { it.macAddress == lastMac }
@@ -298,13 +304,50 @@ fun MainScreen(db: AppDatabase) {
             }
         }
 
-        Box(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().fillMaxWidth().padding(top = 16.dp, start = 16.dp, end = 16.dp)) {
+        // --- MENU DU HAUT + ALERTE BATTERIE ---
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .fillMaxWidth()
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+        ) {
             TopMenuCard(
                 onGarageClick = { showGarageDialog = true },
                 onSettingsClick = { showSettingsDialog = true }
             )
+
+            // BANDEAU D'ALERTE ROUGE (Si batterie optimisée)
+            if (isBatteryOptimized.value) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:${context.packageName}")
+                            context.startActivity(intent)
+                        } catch(e: Exception) {
+                            Toast.makeText(context, "Erreur ouverture paramètres", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.BatteryAlert, contentDescription = null, tint = TextWhite)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Détection auto à risque ! Cliquez ici pour désactiver l'optimisation batterie.",
+                            color = TextWhite,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
 
+        // --- PARTIE BASSE (GPS + INFO) ---
         Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp).fillMaxWidth()) {
             SmallFloatingButton(
                 icon = Icons.Rounded.MyLocation,
@@ -330,7 +373,7 @@ fun MainScreen(db: AppDatabase) {
                 onNavigateClick = {
                     selectedCar?.let { car ->
                         if (car.latitude != null) {
-                            // Utiliser "geo:" est plus standard pour proposer toutes les apps de cartes
+                            // Ouvre n'importe quelle app GPS installée (Waze, Maps...)
                             val uri = Uri.parse("geo:${car.latitude},${car.longitude}?q=${car.latitude},${car.longitude}(${car.name})")
                             val mapIntent = Intent(Intent.ACTION_VIEW, uri)
                             context.startActivity(mapIntent)
@@ -340,6 +383,7 @@ fun MainScreen(db: AppDatabase) {
             )
         }
 
+        // --- DIALOGUES ---
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,
@@ -385,11 +429,67 @@ fun MainScreen(db: AppDatabase) {
     }
 }
 
-// ... (Le reste des composants UI : GarageDialog, TopMenuCard, CarInfoCard, SettingsDialog, TutorialDialog, SmallFloatingButton, SavedCarItem sont inchangés) ...
-// Copiez ici les composants UI du fichier précédent (GarageDialog, TopMenuCard, etc.) pour que le fichier soit complet.
+// -------------------------------------------------------------------------
+// --- COMPOSANTS UI AUXILIAIRES ---
+// -------------------------------------------------------------------------
 
-// Pour s'assurer que tu as le code complet, je remets les composants UI essentiels qui ont changé (GarageDialog)
-// Les autres (CarInfoCard, etc.) peuvent être repris de ta version précédente.
+@Composable
+fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)),
+        color = SurfaceBlack,
+        contentColor = TextWhite
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f).clickable { onGarageClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Menu, contentDescription = null, tint = NeonBlue)
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(stringResource(R.string.menu_garage), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            }
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Rounded.Settings, contentDescription = null, tint = TextGrey)
+            }
+        }
+    }
+}
+
+@Composable
+fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () -> Unit, onNavigateClick: () -> Unit) {
+    Surface(modifier = Modifier.shadow(16.dp, RoundedCornerShape(24.dp)), shape = RoundedCornerShape(24.dp), color = SurfaceBlack) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val isConnected = connectedCarName != null && (car == null || connectedCarName == car.name)
+                val statusColor = if (isConnected) SuccessGreen else ErrorRed
+                val statusText = stringResource(if (isConnected) R.string.connected else R.string.disconnected)
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.DirectionsCar, null, tint = NeonBlue, modifier = Modifier.size(28.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(car?.name ?: stringResource(R.string.select_car), color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (car?.latitude != null) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Rounded.Place, null, tint = TextGrey, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(stringResource(R.string.parked_on) + formatDate(car.timestamp), color = TextWhite, fontSize = 14.sp)
+                    }
+                }
+            } else { Text(stringResource(R.string.unknown_position), color = TextGrey, fontSize = 14.sp) }
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onParkClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))) { Text(stringResource(R.string.park_here), color = TextWhite) }
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(onClick = onNavigateClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonBlue), shape = RoundedCornerShape(16.dp), enabled = car?.latitude != null) { Icon(Icons.Rounded.NearMe, null); Spacer(modifier = Modifier.width(8.dp)); Text(stringResource(R.string.go_to)) }
+            }
+        }
+    }
+}
 
 @Composable
 fun GarageDialog(
@@ -442,7 +542,7 @@ fun GarageDialog(
                         Icon(Icons.Rounded.Info, null, tint = NeonBlue, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Ajouter votre voiture ouvrira une fenêtre système. Si une demande d'appairage Bluetooth apparaît ensuite, acceptez-la pour garantir la connexion.",
+                            text = "Ajouter votre voiture ouvrira une fenêtre système. Acceptez ensuite la demande d'appairage Bluetooth si elle survient.",
                             color = TextGrey,
                             fontSize = 12.sp
                         )
@@ -497,66 +597,6 @@ fun GarageDialog(
         )
     }
 }
-// Assurez-vous d'avoir les autres fonctions UI (TopMenuCard, CarInfoCard, etc.) en bas du fichier.
-// ... (Copier le reste ici)
-
-@Composable
-fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)),
-        color = SurfaceBlack,
-        contentColor = TextWhite
-    ) {
-        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(modifier = Modifier.weight(1f).clickable { onGarageClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Menu, contentDescription = null, tint = NeonBlue)
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(stringResource(R.string.menu_garage), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            }
-            IconButton(onClick = onSettingsClick) {
-                Icon(Icons.Rounded.Settings, contentDescription = null, tint = TextGrey)
-            }
-        }
-    }
-}
-
-@Composable
-fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () -> Unit, onNavigateClick: () -> Unit) {
-    Surface(modifier = Modifier.shadow(16.dp, RoundedCornerShape(24.dp)), shape = RoundedCornerShape(24.dp), color = SurfaceBlack) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val isConnected = connectedCarName != null && (car == null || connectedCarName == car.name)
-                val statusColor = if (isConnected) SuccessGreen else ErrorRed
-                val statusText = stringResource(if (isConnected) R.string.connected else R.string.disconnected)
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.DirectionsCar, null, tint = NeonBlue, modifier = Modifier.size(28.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(car?.name ?: stringResource(R.string.select_car), color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            if (car?.latitude != null) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Rounded.Place, null, tint = TextGrey, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(stringResource(R.string.parked_on) + formatDate(car.timestamp), color = TextWhite, fontSize = 14.sp)
-                    }
-                }
-            } else { Text(stringResource(R.string.unknown_position), color = TextGrey, fontSize = 14.sp) }
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = onParkClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))) { Text(stringResource(R.string.park_here), color = TextWhite) }
-                Spacer(modifier = Modifier.width(12.dp))
-                Button(onClick = onNavigateClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonBlue), shape = RoundedCornerShape(16.dp), enabled = car?.latitude != null) { Icon(Icons.Rounded.NearMe, null); Spacer(modifier = Modifier.width(8.dp)); Text(stringResource(R.string.go_to)) }
-            }
-        }
-    }
-}
 
 @Composable
 fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: () -> Unit) {
@@ -602,7 +642,7 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
+                    border = BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))
                 ) {
                     Icon(Icons.Rounded.SettingsSystemDaydream, null, tint = TextWhite)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -634,7 +674,7 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("1. Ajoutez votre voiture", color = NeonBlue, fontWeight = FontWeight.Bold)
-                Text("Cliquez sur le Garage, puis 'Ajouter'. Une fenêtre système s'ouvrira. Sélectionnez votre voiture, puis acceptez la demande d'appairage Bluetooth si elle apparaît.", color = TextWhite, fontSize = 14.sp)
+                Text("Cliquez sur le Garage, puis 'Ajouter'. Une fenêtre système s'ouvrira. Sélectionnez votre voiture.", color = TextWhite, fontSize = 14.sp)
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 14.sp)
@@ -660,6 +700,26 @@ fun TutorialDialog(onDismiss: () -> Unit) {
 fun SmallFloatingButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
     FloatingActionButton(onClick = onClick, modifier = modifier.size(48.dp), containerColor = SurfaceBlack, contentColor = TextWhite, shape = CircleShape) { Icon(icon, null, modifier = Modifier.size(20.dp)) }
 }
+
+@Composable
+fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit) {
+    val backgroundColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else SurfaceBlack
+    val borderColor = if (isSelected) NeonBlue else Color.Transparent
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(backgroundColor, RoundedCornerShape(12.dp)).border(1.dp, borderColor, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextWhite)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(car.name, fontWeight = FontWeight.Bold, color = TextWhite)
+            Text(text = if(car.latitude != null) "${stringResource(R.string.parked_on)}${formatDate(car.timestamp)}" else stringResource(R.string.unknown_position), style = MaterialTheme.typography.bodySmall, color = TextGrey)
+        }
+        IconButton(onClick = onRename) { Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp)) }
+        IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp)) }
+    }
+}
+
+// -------------------------------------------------------------------------
+// --- FONCTIONS UTILITAIRES ---
+// -------------------------------------------------------------------------
 
 fun formatDate(timestamp: Long): String = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
 
@@ -702,32 +762,4 @@ private fun checkCurrentConnection(
     }
     adapter.getProfileProxy(context, listener, BluetoothProfile.A2DP)
     adapter.getProfileProxy(context, listener, BluetoothProfile.HEADSET)
-}
-
-@Composable
-fun SavedCarItem(car: CarLocation, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit) {
-    val backgroundColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else SurfaceBlack
-    val borderColor = if (isSelected) NeonBlue else Color.Transparent
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).background(backgroundColor, RoundedCornerShape(12.dp)).border(1.dp, borderColor, RoundedCornerShape(12.dp)).clickable { onClick() }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.DirectionsCar, null, tint = if (isSelected) NeonBlue else TextWhite)
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(car.name, fontWeight = FontWeight.Bold, color = TextWhite)
-            Text(text = if(car.latitude != null) "${stringResource(R.string.parked_on)}${formatDate(car.timestamp)}" else stringResource(R.string.unknown_position), style = MaterialTheme.typography.bodySmall, color = TextGrey)
-        }
-        IconButton(onClick = onRename) { Icon(Icons.Rounded.Edit, null, tint = TextGrey, modifier = Modifier.size(20.dp)) }
-        IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp)) }
-    }
-}
-
-@SuppressLint("MissingPermission")
-fun getBondedDevices(context: Context): List<BluetoothDevice> {
-    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return emptyList()
-    return bluetoothManager.adapter?.bondedDevices?.toList() ?: emptyList()
-}
-
-fun isBluetoothEnabled(context: Context): Boolean {
-    val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    return manager.adapter?.isEnabled == true
 }
