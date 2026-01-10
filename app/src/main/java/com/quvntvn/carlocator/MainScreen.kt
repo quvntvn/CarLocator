@@ -779,6 +779,11 @@ private fun checkCurrentConnection(
     savedCars: List<CarLocation>,
     onResult: (String?) -> Unit
 ) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return
+    }
     val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     val adapter = bluetoothManager?.adapter ?: return
     if (!adapter.isEnabled) return
