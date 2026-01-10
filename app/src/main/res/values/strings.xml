@@ -58,4 +58,9 @@
     <string name="cdm_pairing_error">Pairing failed: %1$s</string>
     <string name="cdm_pairing_success">Car associated successfully!</string>
     <string name="cdm_perm_error">"Permission missing to auto-detect. Please grant it in the app's settings."</string>
+    <string name="bt_invalid_address">Bluetooth address unavailable. Please try again.</string>
+    <string name="bt_pairing_started">Bluetooth pairing request sent...</string>
+    <string name="bt_pairing_pending">Bluetooth pairing is already in progress.</string>
+    <string name="bt_already_paired">Device already paired and ready!</string>
+    <string name="bt_pairing_system">Bluetooth pairing is handled by the system.</string>
 </resources>

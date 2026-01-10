@@ -73,7 +73,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 }
 
                 // CAS 2 : DÉCONNEXION (SAUVEGARDE PARKING)
-                if (BluetoothDevice.ACTION_ACL_DISCONNECTED == intentAction && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                if (BluetoothDevice.ACTION_ACL_DISCONNECTED == intentAction && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                     val serviceIntent = Intent(context, ParkingService::class.java).apply {
                         action = ParkingService.ACTION_DISCONNECTED
                         putExtra(ParkingService.EXTRA_MAC_ADDRESS, savedCar.macAddress)
