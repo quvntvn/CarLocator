@@ -56,4 +56,9 @@
     <string name="cdm_pairing_error">Erreur d\'association : %1$s</string>
     <string name="cdm_pairing_success">Voiture associée avec succès !</string>
     <string name="cdm_perm_error">"Permission manquante pour la détection auto. Veuillez l'activer dans les réglages de l'app."</string>
+    <string name="bt_invalid_address">Adresse Bluetooth indisponible. Réessayez.</string>
+    <string name="bt_pairing_started">Demande d\'appairage Bluetooth envoyée...</string>
+    <string name="bt_pairing_pending">Appairage Bluetooth déjà en cours.</string>
+    <string name="bt_already_paired">Appareil déjà appairé et prêt !</string>
+    <string name="bt_pairing_system">L\'appairage Bluetooth est géré par le système.</string>
 </resources>

@@ -107,12 +107,21 @@ fun MainScreen(db: AppDatabase) {
     fun handleNewCar(mac: String, name: String) {
         scope.launch {
             val normalizedMac = mac.uppercase(Locale.ROOT)
+            if (normalizedMac == "02:00:00:00:00:00" || !BluetoothAdapter.checkBluetoothAddress(normalizedMac)) {
+                Toast.makeText(context, context.getString(R.string.bt_invalid_address), Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val normalizedName = if (name.isBlank()) {
                 "Ma Voiture (${normalizedMac.takeLast(4)})"
             } else {
                 name
             }
-            val newCar = CarLocation(macAddress = normalizedMac, name = normalizedName)
+            val existingCar = db.carDao().getCarByMac(normalizedMac)
+            val newCar = if (existingCar != null && normalizedName.isNotBlank() && existingCar.name != normalizedName) {
+                existingCar.copy(name = normalizedName)
+            } else {
+                existingCar ?: CarLocation(macAddress = normalizedMac, name = normalizedName)
+            }
             db.carDao().insertOrUpdateCar(newCar)
 
             // 1. Activer la surveillance CDM
@@ -132,13 +141,18 @@ fun MainScreen(db: AppDatabase) {
                 val device = adapter.getRemoteDevice(normalizedMac)
 
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
-                    Toast.makeText(context, "Demande d'appairage Bluetooth lancée...", Toast.LENGTH_LONG).show()
-                    device.createBond()
+                    val started = device.createBond()
+                    val messageId = if (started) {
+                        R.string.bt_pairing_started
+                    } else {
+                        R.string.bt_pairing_pending
+                    }
+                    Toast.makeText(context, context.getString(messageId), Toast.LENGTH_LONG).show()
                 } else {
-                    Toast.makeText(context, "Appareil déjà appairé et prêt !", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.bt_already_paired), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Erreur appairage : ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.bt_pairing_system), Toast.LENGTH_SHORT).show()
             }
 
             selectedCar = newCar
