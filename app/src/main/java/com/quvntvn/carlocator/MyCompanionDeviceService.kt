@@ -16,9 +16,9 @@ class MyCompanionDeviceService : CompanionDeviceService() {
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture détectée (CDM) : ${associationInfo.deviceMacAddress}")
 
-        val serviceIntent = Intent(this, ParkingService::class.java).apply {
-            action = ParkingService.ACTION_CONNECTED
-            putExtra(ParkingService.EXTRA_MAC_ADDRESS, associationInfo.deviceMacAddress?.toString())
+        val serviceIntent = Intent(this, TripService::class.java).apply {
+            action = TripService.ACTION_START
+            putExtra(TripService.EXTRA_DEVICE_MAC, associationInfo.deviceMacAddress?.toString())
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -31,9 +31,9 @@ class MyCompanionDeviceService : CompanionDeviceService() {
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture perdue (CDM) : ${associationInfo.deviceMacAddress}")
 
-        val serviceIntent = Intent(this, ParkingService::class.java).apply {
-            action = ParkingService.ACTION_DISCONNECTED
-            putExtra(ParkingService.EXTRA_MAC_ADDRESS, associationInfo.deviceMacAddress?.toString())
+        val serviceIntent = Intent(this, TripService::class.java).apply {
+            action = TripService.ACTION_STOP_AND_SAVE
+            putExtra(TripService.EXTRA_DEVICE_MAC, associationInfo.deviceMacAddress?.toString())
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
