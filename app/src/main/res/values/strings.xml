@@ -50,11 +50,11 @@
     <string name="parking_service_channel_name">Parking Service</string>
 
     <string name="tuto_title">Welcome to CarLocator! 🚗</string>
-    <string name="tuto_intro">How to use the app:</string>
+    <string name="tuto_intro">To make the app work properly:</string>
     <string name="tuto_step1_title">1. Add your car</string>
-    <string name="tuto_step1_body">Open the Garage, then tap \'Add\'. A system window will appear. Select your car.</string>
-    <string name="tuto_step2">2. That\'s it! The app automatically saves your location when Bluetooth disconnects.</string>
-    <string name="tuto_step3">3. Use \'Go There\' to find your vehicle.</string>
+    <string name="tuto_step1_body">Open the Garage, then tap \'Add\' to pair your car via the app. A system window will appear: select your car and accept the Bluetooth pairing request if prompted.</string>
+    <string name="tuto_step2">2. Enable notifications to receive connection/disconnection alerts and location-saving updates.</string>
+    <string name="tuto_step3">3. Then the app automatically saves your location when Bluetooth disconnects. Use \'Go There\' to find your vehicle.</string>
     <string name="tuto_button">Let\'s go!</string>
     <string name="settings_show_tuto">How does it work?</string>
     <string name="tuto_battery_title">Battery Optimization</string>

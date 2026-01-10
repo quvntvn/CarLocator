@@ -50,11 +50,11 @@
     <string name="parking_service_channel_name">Service de stationnement</string>
 
     <string name="tuto_title">Bienvenue sur CarLocator ! 🚗</string>
-    <string name="tuto_intro">Comment utiliser l\'application :</string>
+    <string name="tuto_intro">Pour que l\'appli fonctionne correctement :</string>
     <string name="tuto_step1_title">1. Ajoutez votre voiture</string>
-    <string name="tuto_step1_body">Ouvrez le Garage, puis appuyez sur « Ajouter ». Une fenêtre système s\'ouvrira. Sélectionnez votre voiture.</string>
-    <string name="tuto_step2">2. C\'est tout ! L\'application sauvegarde automatiquement votre position quand le Bluetooth se déconnecte.</string>
-    <string name="tuto_step3">3. Utilisez « S\'y rendre » pour retrouver votre véhicule.</string>
+    <string name="tuto_step1_body">Ouvrez le Garage, puis appuyez sur « Ajouter » pour appairer votre voiture via l\'application. Une fenêtre système s\'ouvrira : sélectionnez votre voiture et acceptez l\'appairage Bluetooth si demandé.</string>
+    <string name="tuto_step2">2. Activez les notifications pour recevoir les alertes de connexion/déconnexion et l\'enregistrement de position.</string>
+    <string name="tuto_step3">3. Ensuite, l\'application sauvegarde automatiquement votre position quand le Bluetooth se déconnecte. Utilisez « S\'y rendre » pour retrouver votre véhicule.</string>
     <string name="tuto_button">C\'est parti !</string>
     <string name="settings_show_tuto">Comment ça marche ?</string>
     <string name="tuto_battery_title">Optimisation batterie</string>
