@@ -18,13 +18,11 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             return
         }
 
-        // Vérifiez ici si c'est bien votre voiture (par nom ou adresse MAC)
-        // if (device?.name != "MaVoiture") return
-
         if (BluetoothDevice.ACTION_ACL_CONNECTED == action) {
             // Démarrer le service de trajet (Notif Puce Verte)
             val serviceIntent = Intent(context, TripService::class.java).apply {
-                action = TripService.ACTION_START
+                // 'this.action' refers to the Intent's action property
+                this.action = TripService.ACTION_START
                 putExtra(TripService.EXTRA_DEVICE_NAME, device?.name ?: context.getString(R.string.trip_default_car_name))
                 putExtra(TripService.EXTRA_DEVICE_MAC, device?.address)
             }
@@ -38,7 +36,8 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         else if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
             // Ordonner au service de sauvegarder et de s'arrêter
             val serviceIntent = Intent(context, TripService::class.java).apply {
-                action = TripService.ACTION_STOP_AND_SAVE
+                // 'this.action' refers to the Intent's action property
+                this.action = TripService.ACTION_STOP_AND_SAVE
                 putExtra(TripService.EXTRA_DEVICE_MAC, device?.address)
             }
             context.startService(serviceIntent)
