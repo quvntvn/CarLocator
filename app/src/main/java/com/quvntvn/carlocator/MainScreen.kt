@@ -49,12 +49,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -80,6 +83,7 @@ fun MainScreen(db: AppDatabase) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefsManager = remember { PrefsManager(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // États des dialogues
     var showGarageDialog by remember { mutableStateOf(false) }
@@ -95,10 +99,24 @@ fun MainScreen(db: AppDatabase) {
     var selectedCar by remember { mutableStateOf<CarLocation?>(null) }
 
     // Vérification batterie au lancement
-    LaunchedEffect(Unit) {
+    fun updateBatteryOptimizationState() {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         // Renvoie true si l'optimisation est active (mauvais pour nous)
         isBatteryOptimized.value = !pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    LaunchedEffect(Unit) {
+        updateBatteryOptimizationState()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                updateBatteryOptimizationState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // --- LOGIQUE COMMUNE D'AJOUT ---
@@ -111,10 +129,14 @@ fun MainScreen(db: AppDatabase) {
                 Toast.makeText(context, context.getString(R.string.bt_invalid_address), Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            val normalizedName = if (name.isBlank()) {
-                "Ma Voiture (${normalizedMac.takeLast(4)})"
-            } else {
-                name
+            val normalizedName = name.trim().ifBlank {
+                val bluetoothName = runCatching {
+                    val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                    val adapter = bluetoothManager.adapter
+                    adapter.getRemoteDevice(normalizedMac).name
+                }.getOrNull()
+                bluetoothName?.takeIf { it.isNotBlank() }?.trim()
+                    ?: context.getString(R.string.default_car_name, normalizedMac.takeLast(4))
             }
             val existingCar = db.carDao().getCarByMac(normalizedMac)
             val newCar = if (existingCar != null && normalizedName.isNotBlank() && existingCar.name != normalizedName) {
@@ -198,7 +220,7 @@ fun MainScreen(db: AppDatabase) {
                 .setSingleDevice(false)
                 .build()
 
-            Toast.makeText(context, "Recherche... Sélectionnez votre voiture dans la liste", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.bt_association_search), Toast.LENGTH_LONG).show()
 
             deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
                 override fun onAssociationPending(intentSender: IntentSender) {
@@ -215,11 +237,12 @@ fun MainScreen(db: AppDatabase) {
                 }
 
                 override fun onFailure(error: CharSequence?) {
-                    Toast.makeText(context, "Erreur : $error", Toast.LENGTH_SHORT).show()
+                    val message = error?.toString() ?: context.getString(R.string.error_unknown)
+                    Toast.makeText(context, context.getString(R.string.bt_association_error, message), Toast.LENGTH_SHORT).show()
                 }
             }, null)
         } else {
-            Toast.makeText(context, "Fonctionnalité non disponible sur cette version d'Android", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.bt_feature_unavailable), Toast.LENGTH_SHORT).show()
         }
     }
     // -----------------------------------------------------------
@@ -355,7 +378,7 @@ fun MainScreen(db: AppDatabase) {
                             intent.data = Uri.parse("package:${context.packageName}")
                             context.startActivity(intent)
                         } catch(e: Exception) {
-                            Toast.makeText(context, "Erreur ouverture paramètres", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.open_settings_error), Toast.LENGTH_SHORT).show()
                         }
                     }
                 ) {
@@ -363,7 +386,7 @@ fun MainScreen(db: AppDatabase) {
                         Icon(Icons.Rounded.BatteryAlert, contentDescription = null, tint = TextWhite)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Détection auto à risque ! Cliquez ici pour désactiver l'optimisation batterie.",
+                            text = stringResource(R.string.battery_optimization_warning),
                             color = TextWhite,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold
@@ -568,7 +591,7 @@ fun GarageDialog(
                         Icon(Icons.Rounded.Info, null, tint = NeonBlue, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Ajouter votre voiture ouvrira une fenêtre système. Acceptez ensuite la demande d'appairage Bluetooth si elle survient.",
+                            text = stringResource(R.string.garage_add_info),
                             color = TextGrey,
                             fontSize = 12.sp
                         )
@@ -627,8 +650,6 @@ fun GarageDialog(
 @Composable
 fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit, onShowTutorial: () -> Unit) {
     var isAppEnabled by remember { mutableStateOf(prefs.isAppEnabled()) }
-    var isConnectionNotif by remember { mutableStateOf(prefs.isConnectionNotifEnabled()) }
-    var isParkedNotif by remember { mutableStateOf(prefs.isParkedNotifEnabled()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -644,16 +665,7 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                     Switch(checked = isAppEnabled, onCheckedChange = { isAppEnabled = it; prefs.setAppEnabled(it) }, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
                 }
                 Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(R.string.notif_connection), color = TextWhite)
-                    Switch(checked = isConnectionNotif, onCheckedChange = { isConnectionNotif = it; prefs.setConnectionNotifEnabled(it) }, enabled = isAppEnabled, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
-                }
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(R.string.notif_parked), color = TextWhite)
-                    Switch(checked = isParkedNotif, onCheckedChange = { isParkedNotif = it; prefs.setParkedNotifEnabled(it) }, enabled = isAppEnabled, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
-                }
-                Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
-                Text("Système", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+                Text(stringResource(R.string.settings_system_section), color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
                 Button(
                     onClick = {
                         try {
@@ -662,7 +674,7 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                             }
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Impossible d'ouvrir les réglages", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.open_settings_error), Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -672,7 +684,7 @@ fun SettingsDialog(context: Context, prefs: PrefsManager, onDismiss: () -> Unit,
                 ) {
                     Icon(Icons.Rounded.SettingsSystemDaydream, null, tint = TextWhite)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ouvrir réglages App (Batterie)", color = TextWhite)
+                    Text(stringResource(R.string.settings_open_app_settings), color = TextWhite)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
@@ -699,8 +711,8 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                 Text(stringResource(R.string.tuto_intro), color = TextGrey, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("1. Ajoutez votre voiture", color = NeonBlue, fontWeight = FontWeight.Bold)
-                Text("Cliquez sur le Garage, puis 'Ajouter'. Une fenêtre système s'ouvrira. Sélectionnez votre voiture.", color = TextWhite, fontSize = 14.sp)
+                Text(stringResource(R.string.tuto_step1_title), color = NeonBlue, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.tuto_step1_body), color = TextWhite, fontSize = 14.sp)
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.tuto_step2), color = TextWhite, fontSize = 14.sp)

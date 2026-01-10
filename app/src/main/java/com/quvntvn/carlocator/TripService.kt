@@ -126,13 +126,11 @@ class TripService : Service() {
             )
             db.carDao().insertOrUpdateCar(updatedCar)
 
-            if (prefs.isParkedNotifEnabled()) {
-                sendNotification(
-                    title = getString(R.string.notif_parked_title),
-                    content = getString(R.string.notif_parked_body, car.name),
-                    notificationId = car.macAddress.hashCode()
-                )
-            }
+            sendNotification(
+                title = getString(R.string.notif_parked_title),
+                content = getString(R.string.notif_parked_body, car.name),
+                notificationId = car.macAddress.hashCode()
+            )
         }
 
         stopTripService()

@@ -70,15 +70,12 @@ class ParkingService : Service() {
     }
 
     private fun handleConnection() {
-        val prefs = PrefsManager(applicationContext)
-        if (prefs.isConnectionNotifEnabled()) {
-            sendNotification(
-                context = this,
-                title = getString(R.string.notif_connected_title, car!!.name),
-                content = getString(R.string.notif_connected_body),
-                notificationId = car!!.macAddress.hashCode()
-            )
-        }
+        sendNotification(
+            context = this,
+            title = getString(R.string.notif_connected_title, car!!.name),
+            content = getString(R.string.notif_connected_body),
+            notificationId = car!!.macAddress.hashCode()
+        )
         stopSelf()
     }
 
@@ -98,15 +95,12 @@ class ParkingService : Service() {
             )
             db.carDao().insertOrUpdateCar(updatedCar)
 
-            val prefs = PrefsManager(applicationContext)
-            if (prefs.isParkedNotifEnabled()) {
-                sendNotification(
-                    context = this,
-                    title = getString(R.string.notif_parked_title),
-                    content = getString(R.string.notif_parked_body, car!!.name),
-                    notificationId = car!!.macAddress.hashCode()
-                )
-            }
+            sendNotification(
+                context = this,
+                title = getString(R.string.notif_parked_title),
+                content = getString(R.string.notif_parked_body, car!!.name),
+                notificationId = car!!.macAddress.hashCode()
+            )
         }
 
         withContext(Dispatchers.Main) {
@@ -165,7 +159,7 @@ class ParkingService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
-                "Parking Service Channel",
+                getString(R.string.parking_service_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
