@@ -26,8 +26,17 @@ class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : Worker
 
         if (isConnected) {
             Log.d("CarLocator", "SafetyNet: Bluetooth connecté détecté. Relance du service si nécessaire.")
+            val prefs = PrefsManager(applicationContext)
+            val macAddress = prefs.getLastSelectedCarMac()
+            if (macAddress == null) {
+                return Result.success()
+            }
+
             // On lance le service en mode "startForeground" (le service gère lui-même s'il tourne déjà)
-            val intent = Intent(applicationContext, ParkingService::class.java)
+            val intent = Intent(applicationContext, TripService::class.java).apply {
+                action = TripService.ACTION_START
+                putExtra(TripService.EXTRA_DEVICE_MAC, macAddress)
+            }
             // Important : sur Android 8+, on doit utiliser startForegroundService si l'app est en background
             try {
                 applicationContext.startForegroundService(intent)
