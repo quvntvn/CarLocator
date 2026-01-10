@@ -30,8 +30,8 @@
     <string name="settings_title">Settings</string>
     <string name="enable_app">Enable Application</string>
     <string name="enable_app_desc">Disable to stop everything</string>
-    <string name="notif_connection">Connection Notification</string>
-    <string name="notif_parked">Car Parked Notification</string>
+    <string name="settings_system_section">System</string>
+    <string name="settings_open_app_settings">Open app settings (Battery)</string>
 
     <string name="notif_channel_name">Car Events</string>
     <string name="notif_connected_title">🟢 Connected to %1$s</string>
@@ -39,6 +39,7 @@
     <string name="notif_parked_title">📍 Car Parked</string>
     <string name="notif_parked_body">Location saved for %1$s</string>
 
+    <string name="default_car_name">My Car (%1$s)</string>
     <string name="trip_default_car_name">Your car</string>
     <string name="trip_notification_channel_name">Trip in progress</string>
     <string name="trip_notif_title">🟢 Connected to %1$s</string>
@@ -46,16 +47,20 @@
 
     <string name="parking_service_notif_title">Saving car location</string>
     <string name="parking_service_notif_body">Your car\'s parking spot is being saved...</string>
+    <string name="parking_service_channel_name">Parking Service</string>
 
     <string name="tuto_title">Welcome to CarLocator! 🚗</string>
     <string name="tuto_intro">How to use the app:</string>
-    <string name="tuto_step1">1. Open \'My Garage\' menu and add your car via Bluetooth.</string>
+    <string name="tuto_step1_title">1. Add your car</string>
+    <string name="tuto_step1_body">Open the Garage, then tap \'Add\'. A system window will appear. Select your car.</string>
     <string name="tuto_step2">2. That\'s it! The app automatically saves your location when Bluetooth disconnects.</string>
     <string name="tuto_step3">3. Use \'Go There\' to find your vehicle.</string>
     <string name="tuto_button">Let\'s go!</string>
     <string name="settings_show_tuto">How does it work?</string>
     <string name="tuto_battery_title">Battery Optimization</string>
-    <string name="tuto_battery_msg">IMPORTANT: To automatically detect your car in the background, please disable the battery optimization for CarLocator in your phone settings (Application > Battery</string>
+    <string name="tuto_battery_msg">IMPORTANT: To automatically detect your car in the background, please disable the battery optimization for CarLocator in your phone settings (Application &gt; Battery).</string>
+    <string name="battery_optimization_warning">Background detection at risk! Tap here to disable battery optimization.</string>
+    <string name="garage_add_info">Adding your car opens a system window. Accept the Bluetooth pairing request if prompted.</string>
 
 
     <string name="perm_gps_required">GPS Permission required</string>
@@ -68,4 +73,9 @@
     <string name="bt_pairing_pending">Bluetooth pairing is already in progress.</string>
     <string name="bt_already_paired">Device already paired and ready!</string>
     <string name="bt_pairing_system">Bluetooth pairing is handled by the system.</string>
+    <string name="bt_association_search">Searching... Select your car from the list.</string>
+    <string name="bt_association_error">Error: %1$s</string>
+    <string name="bt_feature_unavailable">Feature not available on this Android version.</string>
+    <string name="open_settings_error">Unable to open settings.</string>
+    <string name="error_unknown">Unknown error</string>
 </resources>

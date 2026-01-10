@@ -13,8 +13,6 @@ class PrefsManager(context: Context) {
 
         // Nouveaux réglages
         private const val KEY_APP_ENABLED = "app_enabled"
-        private const val KEY_NOTIF_CONNECTION = "notif_connection"
-        private const val KEY_NOTIF_PARKED = "notif_parked"
 
         private const val KEY_SELECTED_CAR_MAC = "selected_car_mac"
     }
@@ -41,14 +39,6 @@ class PrefsManager(context: Context) {
     // Activer/Désactiver l'application
     fun isAppEnabled(): Boolean = prefs.getBoolean(KEY_APP_ENABLED, true)
     fun setAppEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_APP_ENABLED, enabled).apply()
-
-    // Notifs Connexion
-    fun isConnectionNotifEnabled(): Boolean = prefs.getBoolean(KEY_NOTIF_CONNECTION, true)
-    fun setConnectionNotifEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF_CONNECTION, enabled).apply()
-
-    // Notifs Stationnement
-    fun isParkedNotifEnabled(): Boolean = prefs.getBoolean(KEY_NOTIF_PARKED, true)
-    fun setParkedNotifEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF_PARKED, enabled).apply()
 
     // --- NOUVEAU : Sauvegarde de la sélection ---
     fun saveLastSelectedCarMac(mac: String) {

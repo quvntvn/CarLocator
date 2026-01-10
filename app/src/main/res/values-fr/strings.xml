@@ -1,0 +1,80 @@
+<resources>
+    <string name="app_name">Car Locator</string>
+
+    <string name="menu_garage">Mon Garage</string>
+    <string name="settings">Paramètres</string>
+    <string name="close">Fermer</string>
+    <string name="back">Retour</string>
+    <string name="ok">OK</string>
+
+    <string name="add_car_title">Ajouter une voiture</string>
+    <string name="add_button">Ajouter</string>
+    <string name="no_cars">Aucune voiture enregistrée.</string>
+    <string name="parked_on">Stationnée : </string>
+    <string name="unknown_position">Position inconnue ou non stationnée.</string>
+    <string name="park_here">📍 Me garer ici</string>
+    <string name="go_to">S\'y rendre</string>
+    <string name="delete">Supprimer</string>
+    <string name="connected">Connectée</string>
+    <string name="disconnected">Déconnectée</string>
+    <string name="select_car">Sélectionnez une voiture</string>
+    <string name="car_parked_toast">stationnée !</string>
+
+    <string name="bt_disabled_title">Bluetooth désactivé</string>
+    <string name="bt_disabled_msg">Veuillez activer le Bluetooth pour trouver vos appareils.</string>
+    <string name="open_settings">Ouvrir les réglages</string>
+    <string name="refresh_bt">Je l\'ai activé, actualiser</string>
+    <string name="select_device_instruction">Sélectionnez votre voiture parmi les appareils appairés :</string>
+    <string name="no_device_found">Aucun appareil trouvé. Vérifiez les réglages de votre téléphone.</string>
+
+    <string name="settings_title">Paramètres</string>
+    <string name="enable_app">Activer l\'application</string>
+    <string name="enable_app_desc">Désactive tout le fonctionnement</string>
+    <string name="settings_system_section">Système</string>
+    <string name="settings_open_app_settings">Ouvrir les réglages de l\'app (Batterie)</string>
+
+    <string name="notif_channel_name">Événements voiture</string>
+    <string name="notif_connected_title">🟢 Connecté à %1$s</string>
+    <string name="notif_connected_body">Bon trajet !</string>
+    <string name="notif_parked_title">📍 Voiture stationnée</string>
+    <string name="notif_parked_body">Position enregistrée pour %1$s</string>
+
+    <string name="default_car_name">Ma voiture (%1$s)</string>
+    <string name="trip_default_car_name">Votre voiture</string>
+    <string name="trip_notification_channel_name">Trajet en cours</string>
+    <string name="trip_notif_title">🟢 Connecté à %1$s</string>
+    <string name="trip_notif_body">Trajet en cours... position prête à être sauvegardée.</string>
+
+    <string name="parking_service_notif_title">Enregistrement de la position</string>
+    <string name="parking_service_notif_body">La position de votre voiture est en cours d\'enregistrement...</string>
+    <string name="parking_service_channel_name">Service de stationnement</string>
+
+    <string name="tuto_title">Bienvenue sur CarLocator ! 🚗</string>
+    <string name="tuto_intro">Comment utiliser l\'application :</string>
+    <string name="tuto_step1_title">1. Ajoutez votre voiture</string>
+    <string name="tuto_step1_body">Ouvrez le Garage, puis appuyez sur « Ajouter ». Une fenêtre système s\'ouvrira. Sélectionnez votre voiture.</string>
+    <string name="tuto_step2">2. C\'est tout ! L\'application sauvegarde automatiquement votre position quand le Bluetooth se déconnecte.</string>
+    <string name="tuto_step3">3. Utilisez « S\'y rendre » pour retrouver votre véhicule.</string>
+    <string name="tuto_button">C\'est parti !</string>
+    <string name="settings_show_tuto">Comment ça marche ?</string>
+    <string name="tuto_battery_title">Optimisation batterie</string>
+    <string name="tuto_battery_msg">IMPORTANT : Pour détecter automatiquement votre voiture en arrière-plan, désactivez l\'optimisation batterie pour CarLocator dans les réglages du téléphone (Application &gt; Batterie).</string>
+    <string name="battery_optimization_warning">Détection en arrière-plan à risque ! Appuyez ici pour désactiver l\'optimisation batterie.</string>
+    <string name="garage_add_info">Ajouter votre voiture ouvre une fenêtre système. Acceptez la demande d\'appairage Bluetooth si elle apparaît.</string>
+
+    <string name="perm_gps_required">Autorisation GPS requise</string>
+    <string name="cdm_pairing_cancelled">Appairage annulé</string>
+    <string name="cdm_pairing_error">Échec de l\'appairage : %1$s</string>
+    <string name="cdm_pairing_success">Voiture associée avec succès !</string>
+    <string name="cdm_perm_error">"Autorisation manquante pour la détection automatique. Accordez-la dans les réglages de l\'app."</string>
+    <string name="bt_invalid_address">Adresse Bluetooth indisponible. Veuillez réessayer.</string>
+    <string name="bt_pairing_started">Demande d\'appairage Bluetooth envoyée...</string>
+    <string name="bt_pairing_pending">L\'appairage Bluetooth est déjà en cours.</string>
+    <string name="bt_already_paired">Appareil déjà appairé et prêt !</string>
+    <string name="bt_pairing_system">L\'appairage Bluetooth est géré par le système.</string>
+    <string name="bt_association_search">Recherche... Sélectionnez votre voiture dans la liste.</string>
+    <string name="bt_association_error">Erreur : %1$s</string>
+    <string name="bt_feature_unavailable">Fonctionnalité non disponible sur cette version d\'Android.</string>
+    <string name="open_settings_error">Impossible d\'ouvrir les réglages.</string>
+    <string name="error_unknown">Erreur inconnue</string>
+</resources>
