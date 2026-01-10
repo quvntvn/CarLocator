@@ -238,8 +238,11 @@ fun MainScreen(db: AppDatabase) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(perms.toTypedArray())
+        val missingPerms = perms.filter { perm ->
+            ActivityCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missingPerms.isNotEmpty()) {
+            permissionLauncher.launch(missingPerms.toTypedArray())
         }
     }
 
