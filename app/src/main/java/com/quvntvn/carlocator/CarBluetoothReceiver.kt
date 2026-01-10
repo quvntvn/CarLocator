@@ -14,6 +14,10 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         val prefs = PrefsManager(context)
         val selectedMac = prefs.getLastSelectedCarMac()
 
+        if (!prefs.isAppEnabled()) {
+            return
+        }
+
         if (selectedMac != null && device?.address != null && device.address != selectedMac) {
             return
         }

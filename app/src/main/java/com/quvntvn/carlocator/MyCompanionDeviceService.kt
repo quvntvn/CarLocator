@@ -15,6 +15,9 @@ class MyCompanionDeviceService : CompanionDeviceService() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture détectée (CDM) : ${associationInfo.deviceMacAddress}")
+        if (!PrefsManager(this).isAppEnabled()) {
+            return
+        }
 
         val serviceIntent = Intent(this, TripService::class.java).apply {
             action = TripService.ACTION_START
@@ -30,6 +33,9 @@ class MyCompanionDeviceService : CompanionDeviceService() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
         Log.d("CarLocator", "Voiture perdue (CDM) : ${associationInfo.deviceMacAddress}")
+        if (!PrefsManager(this).isAppEnabled()) {
+            return
+        }
 
         val serviceIntent = Intent(this, TripService::class.java).apply {
             action = TripService.ACTION_STOP_AND_SAVE

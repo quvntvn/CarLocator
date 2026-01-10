@@ -39,6 +39,11 @@ class ParkingService : Service() {
         val action = intent?.action
         val macAddress = intent?.getStringExtra(EXTRA_MAC_ADDRESS)
 
+        if (!PrefsManager(applicationContext).isAppEnabled()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         if (macAddress == null) {
             stopSelf()
             return START_NOT_STICKY

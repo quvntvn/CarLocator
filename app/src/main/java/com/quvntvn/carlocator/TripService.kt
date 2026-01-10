@@ -41,6 +41,12 @@ class TripService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val prefs = PrefsManager(applicationContext)
+        if (!prefs.isAppEnabled()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         val action = intent?.action ?: ACTION_START
 
         if (action == ACTION_STOP_AND_SAVE) {
