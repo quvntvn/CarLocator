@@ -24,9 +24,12 @@ class TripService : Service() {
         const val ACTION_STOP_AND_SAVE = "ACTION_STOP_AND_SAVE"
         const val EXTRA_DEVICE_NAME = "EXTRA_DEVICE_NAME"
         const val EXTRA_DEVICE_MAC = "EXTRA_DEVICE_MAC"
+        const val EXTRA_NOTIFY_CONNECTED = "EXTRA_NOTIFY_CONNECTED"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "trip_channel"
+        @Volatile
+        private var isTripActive = false
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -38,6 +41,7 @@ class TripService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.coroutineContext.cancelChildren()
+        isTripActive = false
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -60,7 +64,12 @@ class TripService : Service() {
         // Récupérer le nom de la voiture passé par le Receiver
         val macAddress = intent?.getStringExtra(EXTRA_DEVICE_MAC)
         val deviceName = intent?.getStringExtra(EXTRA_DEVICE_NAME)
+        val shouldNotifyConnected = intent?.getBooleanExtra(EXTRA_NOTIFY_CONNECTED, false) ?: false
         val resolvedName = deviceName ?: getString(R.string.trip_default_car_name)
+        val wasActive = isTripActive
+        if (!wasActive) {
+            isTripActive = true
+        }
         startForeground(NOTIFICATION_ID, createNotification(resolvedName))
 
         if (deviceName == null && macAddress != null) {
@@ -70,8 +79,21 @@ class TripService : Service() {
                 if (car != null) {
                     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, createNotification(car.name))
+                    if (shouldNotifyConnected && !wasActive) {
+                        sendNotification(
+                            title = getString(R.string.notif_connected_title, car.name),
+                            content = getString(R.string.notif_connected_body),
+                            notificationId = car.macAddress.hashCode()
+                        )
+                    }
                 }
             }
+        } else if (shouldNotifyConnected && !wasActive) {
+            sendNotification(
+                title = getString(R.string.notif_connected_title, resolvedName),
+                content = getString(R.string.notif_connected_body),
+                notificationId = (macAddress ?: resolvedName).hashCode()
+            )
         }
 
         return START_STICKY

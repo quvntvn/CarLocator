@@ -37,6 +37,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 this.action = TripService.ACTION_START
                 putExtra(TripService.EXTRA_DEVICE_NAME, device?.name ?: context.getString(R.string.trip_default_car_name))
                 putExtra(TripService.EXTRA_DEVICE_MAC, device?.address)
+                putExtra(TripService.EXTRA_NOTIFY_CONNECTED, true)
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
