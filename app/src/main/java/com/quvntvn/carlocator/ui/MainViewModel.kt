@@ -318,7 +318,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val deviceManager = appContext.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val association = deviceManager.associations.firstOrNull {
+                val association = deviceManager.myAssociations.firstOrNull {
                     it.deviceMacAddress?.toString()?.equals(macAddress, ignoreCase = true) == true
                 }
                 if (association != null) {
