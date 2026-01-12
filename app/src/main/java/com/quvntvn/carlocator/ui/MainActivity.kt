@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,15 +7,15 @@ import com.quvntvn.carlocator.ui.theme.CarLocatorTheme
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.quvntvn.carlocator.service.SafetyNetWorker
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = AppDatabase.getInstance(this)
         setContent {
             CarLocatorTheme {
-                MainScreen(db = db)
+                MainScreen()
             }
         }
         // 1. Démarrage de la ceinture de sécurité (SafetyNet)

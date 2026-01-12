@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.data
 
 import android.content.Context
 import androidx.room.Database

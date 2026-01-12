@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.service
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothProfile
@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.quvntvn.carlocator.data.PrefsManager
 
 class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
 

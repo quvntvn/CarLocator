@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.service
 
 import android.Manifest
 import android.bluetooth.BluetoothDevice
@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
+import com.quvntvn.carlocator.R
+import com.quvntvn.carlocator.data.PrefsManager
 
 class CarBluetoothReceiver : BroadcastReceiver() {
 
@@ -18,7 +20,12 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             return
         }
         val action = intent.action
-        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        }
         val prefs = PrefsManager(context)
         val selectedMac = prefs.getLastSelectedCarMac()
 
