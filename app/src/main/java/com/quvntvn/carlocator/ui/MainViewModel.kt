@@ -243,8 +243,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             timestamp = System.currentTimeMillis()
                         )
                     )
-                    emitToast(\"${car.name} ${appContext.getString(R.string.car_parked_toast)}\", Toast.LENGTH_SHORT)
-                }
+                    emitToast("${car.name} ${appContext.getString(R.string.car_parked_toast)}", Toast.LENGTH_SHORT)                }
             }
         }
     }
