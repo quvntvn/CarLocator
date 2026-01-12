@@ -1,4 +1,3 @@
-import androidx.glance.appwidget.compose
 import java.util.Properties
 import java.io.FileInputStream
 
