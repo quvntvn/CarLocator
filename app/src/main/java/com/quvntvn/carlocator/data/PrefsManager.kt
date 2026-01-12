@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -8,9 +8,6 @@ class PrefsManager(context: Context) {
 
     companion object {
         private const val KEY_FIRST_LAUNCH = "first_launch"
-        private const val KEY_LATITUDE = "last_car_lat"
-        private const val KEY_LONGITUDE = "last_car_lng"
-
         // Nouveaux réglages
         private const val KEY_APP_ENABLED = "app_enabled"
 
@@ -19,20 +16,6 @@ class PrefsManager(context: Context) {
 
     fun isFirstLaunch(): Boolean = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
     fun setFirstLaunchDone() = prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
-
-    fun saveCarLocation(lat: Double, lng: Double) {
-        prefs.edit()
-            .putFloat(KEY_LATITUDE, lat.toFloat())
-            .putFloat(KEY_LONGITUDE, lng.toFloat())
-            .apply()
-    }
-
-    fun getLastCarLocation(): Pair<Double, Double>? {
-        if (!prefs.contains(KEY_LATITUDE)) return null
-        val lat = prefs.getFloat(KEY_LATITUDE, 0f).toDouble()
-        val lng = prefs.getFloat(KEY_LONGITUDE, 0f).toDouble()
-        return Pair(lat, lng)
-    }
 
     // --- GESTION DES PARAMÈTRES ---
 

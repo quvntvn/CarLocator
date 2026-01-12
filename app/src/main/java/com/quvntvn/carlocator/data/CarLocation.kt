@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

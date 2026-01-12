@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -9,7 +9,13 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import com.quvntvn.carlocator.R
+import com.quvntvn.carlocator.data.AppDatabase
+import com.quvntvn.carlocator.data.PrefsManager
+import com.quvntvn.carlocator.ui.MainActivity
+import com.quvntvn.carlocator.utils.GpsTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +36,8 @@ class TripService : Service() {
         private const val CHANNEL_ID = "trip_channel"
         @Volatile
         private var isTripActive = false
+        private const val EVENT_DEDUP_WINDOW_MS = 2_000L
+        private var lastEvent: TripEvent? = null
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -52,9 +60,12 @@ class TripService : Service() {
         }
 
         val action = intent?.action ?: ACTION_START
+        val macAddress = intent?.getStringExtra(EXTRA_DEVICE_MAC)
+        if (!shouldProcessEvent(action, macAddress)) {
+            return START_NOT_STICKY
+        }
 
         if (action == ACTION_STOP_AND_SAVE) {
-            val macAddress = intent?.getStringExtra(EXTRA_DEVICE_MAC)
             serviceScope.launch {
                 handleDisconnection(macAddress)
             }
@@ -62,7 +73,6 @@ class TripService : Service() {
         }
 
         // Récupérer le nom de la voiture passé par le Receiver
-        val macAddress = intent?.getStringExtra(EXTRA_DEVICE_MAC)
         val deviceName = intent?.getStringExtra(EXTRA_DEVICE_NAME)
         val shouldNotifyConnected = intent?.getBooleanExtra(EXTRA_NOTIFY_CONNECTED, false) ?: false
         val resolvedName = deviceName ?: getString(R.string.trip_default_car_name)
@@ -194,4 +204,25 @@ class TripService : Service() {
 
         manager.notify(notificationId, notification)
     }
+
+    @Synchronized
+    private fun shouldProcessEvent(action: String?, macAddress: String?): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val last = lastEvent
+        if (last != null &&
+            last.action == action &&
+            last.macAddress == macAddress &&
+            now - last.timestampMs < EVENT_DEDUP_WINDOW_MS
+        ) {
+            return false
+        }
+        lastEvent = TripEvent(action, macAddress, now)
+        return true
+    }
+
+    private data class TripEvent(
+        val action: String?,
+        val macAddress: String?,
+        val timestampMs: Long
+    )
 }
