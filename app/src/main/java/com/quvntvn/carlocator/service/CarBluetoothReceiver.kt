@@ -14,17 +14,21 @@ import com.quvntvn.carlocator.data.PrefsManager
 class CarBluetoothReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
+        val hasBluetoothConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
         val action = intent.action
-        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        val device = if (hasBluetoothConnectPermission) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+            }
         } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+            null
         }
         val prefs = PrefsManager(context)
         val selectedMac = prefs.getLastSelectedCarMac()
@@ -33,7 +37,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             return
         }
 
-        if (selectedMac != null && device?.address != null && device.address != selectedMac) {
+        if (selectedMac != null && hasBluetoothConnectPermission && device?.address != null && device.address != selectedMac) {
             return
         }
 
@@ -42,8 +46,15 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
                 this.action = TripService.ACTION_START
-                putExtra(TripService.EXTRA_DEVICE_NAME, device?.name ?: context.getString(R.string.trip_default_car_name))
-                putExtra(TripService.EXTRA_DEVICE_MAC, device?.address)
+                putExtra(
+                    TripService.EXTRA_DEVICE_NAME,
+                    if (hasBluetoothConnectPermission) {
+                        device?.name
+                    } else {
+                        null
+                    } ?: context.getString(R.string.trip_default_car_name)
+                )
+                putExtra(TripService.EXTRA_DEVICE_MAC, if (hasBluetoothConnectPermission) device?.address else null)
                 putExtra(TripService.EXTRA_NOTIFY_CONNECTED, true)
             }
 
@@ -58,7 +69,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
                 this.action = TripService.ACTION_STOP_AND_SAVE
-                putExtra(TripService.EXTRA_DEVICE_MAC, device?.address)
+                putExtra(TripService.EXTRA_DEVICE_MAC, if (hasBluetoothConnectPermission) device?.address else null)
             }
             context.startService(serviceIntent)
         }
