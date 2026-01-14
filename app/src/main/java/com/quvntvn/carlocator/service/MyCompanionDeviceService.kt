@@ -31,7 +31,6 @@ class MyCompanionDeviceService : CompanionDeviceService() {
         val serviceIntent = Intent(this, TripService::class.java).apply {
             action = TripService.ACTION_START
             putExtra(TripService.EXTRA_DEVICE_MAC, associationInfo.deviceMacAddress?.toString())
-            putExtra(TripService.EXTRA_NOTIFY_CONNECTED, true)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)

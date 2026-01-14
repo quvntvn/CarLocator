@@ -34,8 +34,6 @@
     <string name="settings_open_app_settings">Ouvrir les réglages de l\'app (Batterie)</string>
 
     <string name="notif_channel_name">Événements voiture</string>
-    <string name="notif_connected_title">🟢 Connecté à %1$s</string>
-    <string name="notif_connected_body">Bon trajet !</string>
     <string name="notif_parked_title">📍 Voiture stationnée</string>
     <string name="notif_parked_body">Position enregistrée pour %1$s</string>
 
