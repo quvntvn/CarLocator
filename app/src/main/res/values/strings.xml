@@ -34,8 +34,6 @@
     <string name="settings_open_app_settings">Open app settings (Battery)</string>
 
     <string name="notif_channel_name">Car Events</string>
-    <string name="notif_connected_title">🟢 Connected to %1$s</string>
-    <string name="notif_connected_body">Have a safe trip!</string>
     <string name="notif_parked_title">📍 Car Parked</string>
     <string name="notif_parked_body">Location saved for %1$s</string>
 

@@ -45,7 +45,6 @@ class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : Worker
         val intent = Intent(applicationContext, TripService::class.java).apply {
             action = TripService.ACTION_START
             putExtra(TripService.EXTRA_DEVICE_MAC, macAddress)
-            putExtra(TripService.EXTRA_NOTIFY_CONNECTED, true)
         }
         // Important : sur Android 8+, on doit utiliser startForegroundService si l'app est en background
         try {
