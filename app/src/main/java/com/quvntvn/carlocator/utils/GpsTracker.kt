@@ -11,7 +11,10 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.tasks.await
 
-class GpsTracker(private val context: Context) {
+class GpsTracker(
+    private val context: Context,
+    private val requireBackgroundPermission: Boolean = true
+) {
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
     @SuppressLint("MissingPermission") // On suppose que la permission est demandée dans l'interface
@@ -38,7 +41,7 @@ class GpsTracker(private val context: Context) {
         if (!fineGranted && !coarseGranted) {
             return false
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (requireBackgroundPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val backgroundGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (!backgroundGranted) {
                 return false
