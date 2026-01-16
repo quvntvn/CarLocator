@@ -1,7 +1,11 @@
 package com.quvntvn.carlocator.service
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -41,7 +45,26 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             return
         }
 
-        if (BluetoothDevice.ACTION_ACL_CONNECTED == action) {
+        if (BluetoothAdapter.ACTION_STATE_CHANGED == action) {
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                val serviceIntent = Intent(context, TripService::class.java).apply {
+                    this.action = TripService.ACTION_STOP_AND_SAVE
+                    putExtra(TripService.EXTRA_DEVICE_MAC, selectedMac)
+                }
+                context.startService(serviceIntent)
+            }
+            return
+        }
+
+        if (BluetoothDevice.ACTION_ACL_CONNECTED == action ||
+            BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED == action ||
+            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED == action
+        ) {
+            val connectionState = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+            if (action != BluetoothDevice.ACTION_ACL_CONNECTED && connectionState != BluetoothProfile.STATE_CONNECTED) {
+                return
+            }
             // Démarrer le service de trajet (Notif Puce Verte)
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
@@ -62,8 +85,16 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             } else {
                 context.startService(serviceIntent)
             }
-        }
-        else if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action) {
+        } else if (BluetoothDevice.ACTION_ACL_DISCONNECTED == action ||
+            BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED == action ||
+            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED == action
+        ) {
+            val connectionState = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+            if (action != BluetoothDevice.ACTION_ACL_DISCONNECTED &&
+                connectionState != BluetoothProfile.STATE_DISCONNECTED
+            ) {
+                return
+            }
             // Ordonner au service de sauvegarder et de s'arrêter
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
