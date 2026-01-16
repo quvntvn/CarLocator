@@ -52,7 +52,11 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                     this.action = TripService.ACTION_STOP_AND_SAVE
                     putExtra(TripService.EXTRA_DEVICE_MAC, selectedMac)
                 }
-                context.startService(serviceIntent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
             }
             return
         }
@@ -101,7 +105,11 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 this.action = TripService.ACTION_STOP_AND_SAVE
                 putExtra(TripService.EXTRA_DEVICE_MAC, if (hasBluetoothConnectPermission) device?.address else null)
             }
-            context.startService(serviceIntent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
         }
     }
 }
