@@ -110,13 +110,15 @@ class TripService : Service() {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.trip_notif_title, deviceName))
             .setContentText(getString(R.string.trip_notif_body))
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Remplacez par votre icône de voiture
             .setContentIntent(pendingIntent)
             .setOngoing(true) // Rend la notif "non enlevable" par l'utilisateur (swipe)
             .build()
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
+        return notification
     }
 
     private fun createParkingNotification(): Notification {
