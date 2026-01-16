@@ -156,7 +156,7 @@ class TripService : Service() {
             return
         }
 
-        val tracker = GpsTracker(this)
+        val tracker = GpsTracker(this, requireBackgroundPermission = false)
         val location = tracker.getLocation()
         if (location != null) {
             val updatedCar = car.copy(
