@@ -30,7 +30,7 @@ class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : Worker
         }
 
         val prefs = PrefsManager(applicationContext)
-        val macAddress = prefs.getLastSelectedCarMac() ?: return Result.success()
+        val macAddress = prefs.getLastConnectedCarMac() ?: prefs.getLastSelectedCarMac() ?: return Result.success()
         val bluetoothManager = applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             ?: return Result.success()
         val connectedDevices = bluetoothManager.getConnectedDevices(BluetoothProfile.A2DP) +
