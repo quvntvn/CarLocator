@@ -223,7 +223,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             db.carDao().deleteCar(car)
             if (_selectedCar.value?.macAddress == car.macAddress) {
                 _selectedCar.value = null
-                prefsManager.saveLastSelectedCarMac("")
+                prefsManager.saveLastSelectedCarMac(null)
             }
             disassociateDevice(car.macAddress)
         }

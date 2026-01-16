@@ -60,6 +60,9 @@ class TripService : Service() {
 
         val action = intent?.action ?: ACTION_START
         val macAddress = intent?.getStringExtra(EXTRA_DEVICE_MAC)
+        if (action == ACTION_START && macAddress != null) {
+            prefs.saveLastConnectedCarMac(macAddress)
+        }
         if (!shouldProcessEvent(action, macAddress)) {
             return START_NOT_STICKY
         }
@@ -143,7 +146,7 @@ class TripService : Service() {
 
     private suspend fun handleDisconnection(macAddress: String?) {
         val prefs = PrefsManager(applicationContext)
-        val resolvedMac = macAddress ?: prefs.getLastSelectedCarMac()
+        val resolvedMac = macAddress ?: prefs.getLastConnectedCarMac() ?: prefs.getLastSelectedCarMac()
         if (resolvedMac == null) {
             stopTripService()
             return

@@ -41,16 +41,21 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             return
         }
 
-        if (selectedMac != null && hasBluetoothConnectPermission && device?.address != null && device.address != selectedMac) {
+        if (selectedMac != null &&
+            hasBluetoothConnectPermission &&
+            device?.address != null &&
+            !device.address.equals(selectedMac, ignoreCase = true)
+        ) {
             return
         }
 
         if (BluetoothAdapter.ACTION_STATE_CHANGED == action) {
             val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
             if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                val lastConnectedMac = prefs.getLastConnectedCarMac()
                 val serviceIntent = Intent(context, TripService::class.java).apply {
                     this.action = TripService.ACTION_STOP_AND_SAVE
-                    putExtra(TripService.EXTRA_DEVICE_MAC, selectedMac)
+                    putExtra(TripService.EXTRA_DEVICE_MAC, lastConnectedMac ?: selectedMac)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent)
@@ -68,6 +73,9 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             val connectionState = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
             if (action != BluetoothDevice.ACTION_ACL_CONNECTED && connectionState != BluetoothProfile.STATE_CONNECTED) {
                 return
+            }
+            if (hasBluetoothConnectPermission && device?.address != null) {
+                prefs.saveLastConnectedCarMac(device.address)
             }
             // Démarrer le service de trajet (Notif Puce Verte)
             val serviceIntent = Intent(context, TripService::class.java).apply {
@@ -98,6 +106,9 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 connectionState != BluetoothProfile.STATE_DISCONNECTED
             ) {
                 return
+            }
+            if (hasBluetoothConnectPermission && device?.address != null) {
+                prefs.saveLastConnectedCarMac(device.address)
             }
             // Ordonner au service de sauvegarder et de s'arrêter
             val serviceIntent = Intent(context, TripService::class.java).apply {
