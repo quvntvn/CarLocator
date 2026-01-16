@@ -65,6 +65,7 @@ class TripService : Service() {
         }
 
         if (action == ACTION_STOP_AND_SAVE) {
+            startForeground(NOTIFICATION_ID, createParkingNotification())
             serviceScope.launch {
                 handleDisconnection(macAddress)
             }
@@ -115,6 +116,26 @@ class TripService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Remplacez par votre icône de voiture
             .setContentIntent(pendingIntent)
             .setOngoing(true) // Rend la notif "non enlevable" par l'utilisateur (swipe)
+            .build()
+    }
+
+    private fun createParkingNotification(): Notification {
+        val channelId = "parking_service_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                getString(R.string.parking_service_channel_name),
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+
+        return NotificationCompat.Builder(this, channelId)
+            .setContentTitle(getString(R.string.parking_service_notif_title))
+            .setContentText(getString(R.string.parking_service_notif_body))
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
             .build()
     }
 
