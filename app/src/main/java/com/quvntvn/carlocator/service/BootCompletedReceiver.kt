@@ -9,13 +9,14 @@ import com.quvntvn.carlocator.data.PrefsManager
 class BootCompletedReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
+        val action = intent.action
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
             return
         }
         if (!PrefsManager(context).isAppEnabled()) {
             return
         }
-        Log.d("CarLocator", "Boot completed: scheduling SafetyNet worker.")
+        Log.d("CarLocator", "System event ($action): scheduling SafetyNet worker.")
         SafetyNetScheduler.schedule(context)
     }
 }
