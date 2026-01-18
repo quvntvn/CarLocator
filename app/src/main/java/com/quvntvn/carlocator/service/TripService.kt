@@ -7,10 +7,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
@@ -68,7 +70,7 @@ class TripService : Service() {
         }
 
         if (action == ACTION_STOP_AND_SAVE) {
-            startForeground(NOTIFICATION_ID, createParkingNotification())
+            startForegroundWithTypes(createParkingNotification())
             serviceScope.launch {
                 handleDisconnection(macAddress)
             }
@@ -82,7 +84,7 @@ class TripService : Service() {
         if (!wasActive) {
             isTripActive = true
         }
-        startForeground(NOTIFICATION_ID, createNotification(resolvedName))
+        startForegroundWithTypes(createNotification(resolvedName))
 
         if (deviceName == null && macAddress != null) {
             serviceScope.launch {
@@ -122,6 +124,16 @@ class TripService : Service() {
             .build()
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
         return notification
+    }
+
+    private fun startForegroundWithTypes(notification: Notification) {
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, serviceType)
     }
 
     private fun createParkingNotification(): Notification {

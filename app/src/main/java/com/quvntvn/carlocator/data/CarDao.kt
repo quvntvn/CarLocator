@@ -13,6 +13,9 @@ interface CarDao {
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
 
+    @Query("SELECT * FROM car_location")
+    suspend fun getAllCarsOnce(): List<CarLocation>
+
     @Query("SELECT * FROM car_location WHERE macAddress = :macAddress LIMIT 1")
     suspend fun getCarByMac(macAddress: String): CarLocation?
 
