@@ -14,6 +14,7 @@ class PrefsManager(context: Context) {
 
         private const val KEY_SELECTED_CAR_MAC = "selected_car_mac"
         private const val KEY_LAST_CONNECTED_CAR_MAC = "last_connected_car_mac"
+        private const val KEY_LOCATION_DISCLOSURE_ACCEPTED = "location_disclosure_accepted"
     }
 
     fun isFirstLaunch(): Boolean = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
@@ -40,6 +41,13 @@ class PrefsManager(context: Context) {
 
     fun getLastConnectedCarMac(): String? {
         return getNormalizedMac(KEY_LAST_CONNECTED_CAR_MAC)
+    }
+
+    // Stocker l'acceptation de la divulgation Google Play (localisation en arrière-plan).
+    fun isLocationDisclosureAccepted(): Boolean = prefs.getBoolean(KEY_LOCATION_DISCLOSURE_ACCEPTED, false)
+
+    fun setLocationDisclosureAccepted(accepted: Boolean) {
+        prefs.edit().putBoolean(KEY_LOCATION_DISCLOSURE_ACCEPTED, accepted).apply()
     }
 
     private fun saveNormalizedMac(key: String, mac: String?) {

@@ -79,6 +79,7 @@ fun MainScreen() {
     var showGarageDialog by remember { mutableStateOf(false) }
     var showTutorialDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showLocationDisclosureDialog by remember { mutableStateOf(false) }
 
     val allCars by viewModel.cars.collectAsStateWithLifecycle()
     val selectedCar by viewModel.selectedCar.collectAsStateWithLifecycle()
@@ -117,11 +118,41 @@ fun MainScreen() {
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { }
 
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+
+    val fineLocationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // Étape 2 (conformité Play Store) : si la position précise est accordée,
+        // on peut seulement ensuite demander la localisation en arrière-plan.
+        if (granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val backgroundGranted = ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!backgroundGranted) {
+                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (viewModel.isFirstLaunch()) showTutorialDialog = true
-        val missingPerms = viewModel.getMissingPermissions()
+        val missingPerms = viewModel.getMissingNonLocationPermissions()
         if (missingPerms.isNotEmpty()) {
             permissionLauncher.launch(missingPerms.toTypedArray())
+        }
+        // Conformité Play Store : ne jamais demander la localisation sans divulgation préalable.
+        val fineGranted = ActivityCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!fineGranted && !viewModel.isLocationDisclosureAccepted()) {
+            showLocationDisclosureDialog = true
+        } else if (!fineGranted && viewModel.isLocationDisclosureAccepted()) {
+            fineLocationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
@@ -321,6 +352,36 @@ fun MainScreen() {
                 viewModel.setFirstLaunchDone()
                 showTutorialDialog = false
             })
+        }
+
+        if (showLocationDisclosureDialog) {
+            AlertDialog(
+                onDismissRequest = { showLocationDisclosureDialog = false },
+                containerColor = DarkerSurface,
+                title = { Text(stringResource(R.string.location_disclosure_title), color = TextWhite, fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.location_disclosure_body),
+                        color = TextGrey,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        // Étape 1 (conformité Play Store) : l'utilisateur a vu la divulgation.
+                        viewModel.setLocationDisclosureAccepted(true)
+                        showLocationDisclosureDialog = false
+                        fineLocationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }) {
+                        Text(stringResource(R.string.continue_label), color = NeonBlue)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLocationDisclosureDialog = false }) {
+                        Text(stringResource(R.string.close), color = TextGrey)
+                    }
+                }
+            )
         }
     }
 }

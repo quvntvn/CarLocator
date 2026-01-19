@@ -72,6 +72,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefsManager.setFirstLaunchDone()
     }
 
+    fun isLocationDisclosureAccepted(): Boolean = prefsManager.isLocationDisclosureAccepted()
+
+    fun setLocationDisclosureAccepted(accepted: Boolean) {
+        prefsManager.setLocationDisclosureAccepted(accepted)
+    }
+
     fun setAppEnabled(enabled: Boolean) {
         prefsManager.setAppEnabled(enabled)
         _isAppEnabled.value = enabled
@@ -82,8 +88,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isBatteryOptimized.value = !pm.isIgnoringBatteryOptimizations(appContext.packageName)
     }
 
-    fun getMissingPermissions(): List<String> {
-        val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    fun getMissingNonLocationPermissions(): List<String> {
+        val perms = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms.add(Manifest.permission.BLUETOOTH_CONNECT)
             perms.add(Manifest.permission.BLUETOOTH_SCAN)
