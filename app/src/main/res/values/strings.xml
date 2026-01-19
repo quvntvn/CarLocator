@@ -76,4 +76,8 @@
     <string name="bt_feature_unavailable">Feature not available on this Android version.</string>
     <string name="open_settings_error">Unable to open settings.</string>
     <string name="error_unknown">Unknown error</string>
+
+    <string name="location_disclosure_title">Background location access</string>
+    <string name="location_disclosure_body">CarLocator uses background location to automatically save your car’s position when Bluetooth disconnects. Your location data stays private and is stored only on this device.</string>
+    <string name="continue_label">Continue</string>
 </resources>
