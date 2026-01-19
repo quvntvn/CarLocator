@@ -42,6 +42,7 @@
     <string name="trip_notification_channel_name">Trip in progress</string>
     <string name="trip_notif_title">🟢 Connected to %1$s</string>
     <string name="trip_notif_body">Trip in progress... location ready to save.</string>
+    <string name="trip_stop_action">Stop trip</string>
 
     <string name="parking_service_notif_title">Saving car location</string>
     <string name="parking_service_notif_body">Your car\'s parking spot is being saved...</string>

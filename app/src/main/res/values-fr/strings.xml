@@ -42,6 +42,7 @@
     <string name="trip_notification_channel_name">Trajet en cours</string>
     <string name="trip_notif_title">🟢 Connecté à %1$s</string>
     <string name="trip_notif_body">Trajet en cours... position prête à être sauvegardée.</string>
+    <string name="trip_stop_action">Arrêter le trajet</string>
 
     <string name="parking_service_notif_title">Enregistrement de la position</string>
     <string name="parking_service_notif_body">La position de votre voiture est en cours d\'enregistrement...</string>
