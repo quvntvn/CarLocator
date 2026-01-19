@@ -115,12 +115,36 @@ class TripService : Service() {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
+        val stopTripIntent = Intent(this, TripService::class.java).apply {
+            action = ACTION_STOP_AND_SAVE
+        }
+        val stopTripPendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(
+                this,
+                1,
+                stopTripIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            PendingIntent.getService(
+                this,
+                1,
+                stopTripIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.trip_notif_title, deviceName))
             .setContentText(getString(R.string.trip_notif_body))
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Remplacez par votre icône de voiture
             .setContentIntent(pendingIntent)
             .setOngoing(true) // Rend la notif "non enlevable" par l'utilisateur (swipe)
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                getString(R.string.trip_stop_action),
+                stopTripPendingIntent
+            )
             .build()
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
         return notification
