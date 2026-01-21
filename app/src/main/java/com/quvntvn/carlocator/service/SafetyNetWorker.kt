@@ -10,14 +10,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.ActivityCompat
-import androidx.work.Worker
 import androidx.work.WorkerParameters
+import androidx.work.CoroutineWorker
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
 
-class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : Worker(context, workerParams) {
+class SafetyNetWorker(context: Context, workerParams: WorkerParameters) : CoroutineWorker(context, workerParams) {
 
-    override fun doWork(): Result {
+    override suspend fun doWork(): Result {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ActivityCompat.checkSelfPermission(applicationContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
         ) {
