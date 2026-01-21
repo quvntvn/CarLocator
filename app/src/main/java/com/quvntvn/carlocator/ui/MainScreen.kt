@@ -2,7 +2,10 @@ package com.quvntvn.carlocator.ui
 
 import android.Manifest
 import android.app.Activity
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -186,13 +189,19 @@ fun MainScreen() {
                     @Suppress("DEPRECATION")
                     intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 }
+                val connectionState = intent.getIntExtra(
+                    BluetoothProfile.EXTRA_STATE,
+                    BluetoothProfile.STATE_DISCONNECTED
+                )
 
-                viewModel.handleBluetoothEvent(action, device)
+                viewModel.handleBluetoothEvent(action, device, connectionState)
             }
         }
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         }
         context.registerReceiver(receiver, filter)

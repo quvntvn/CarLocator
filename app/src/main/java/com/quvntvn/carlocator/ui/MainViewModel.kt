@@ -254,14 +254,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun handleBluetoothEvent(action: String?, device: BluetoothDevice?) {
+    fun handleBluetoothEvent(action: String?, device: BluetoothDevice?, connectionState: Int) {
         if (!isAppEnabled.value) return
         if (device == null) return
         val currentCars = cars.value
         val car = currentCars.find { it.macAddress.equals(device.address, ignoreCase = true) } ?: return
-        if (action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+        val isConnectedEvent = action == BluetoothDevice.ACTION_ACL_CONNECTED ||
+            (action != BluetoothDevice.ACTION_ACL_DISCONNECTED && connectionState == BluetoothProfile.STATE_CONNECTED)
+        val isDisconnectedEvent = action == BluetoothDevice.ACTION_ACL_DISCONNECTED ||
+            (action != BluetoothDevice.ACTION_ACL_CONNECTED && connectionState == BluetoothProfile.STATE_DISCONNECTED)
+        if (isConnectedEvent) {
             _connectedCarName.value = car.name
-        } else if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
+        } else if (isDisconnectedEvent) {
             if (_connectedCarName.value == car.name) {
                 _connectedCarName.value = null
             }
