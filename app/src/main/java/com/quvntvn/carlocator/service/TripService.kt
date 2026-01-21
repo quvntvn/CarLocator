@@ -140,13 +140,17 @@ class TripService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Remplacez par votre icône de voiture
             .setContentIntent(pendingIntent)
             .setOngoing(true) // Rend la notif "non enlevable" par l'utilisateur (swipe)
+            .setAutoCancel(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(
                 R.drawable.ic_launcher_foreground,
                 getString(R.string.trip_stop_action),
                 stopTripPendingIntent
             )
             .build()
-        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
         return notification
     }
 
