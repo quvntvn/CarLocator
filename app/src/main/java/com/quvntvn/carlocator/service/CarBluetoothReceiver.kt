@@ -59,20 +59,19 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
             if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
                 val lastConnectedMac = prefs.getLastConnectedCarMac()
-                val fallbackMac = prefs.getLastSelectedCarMac()
-                val resolvedMac = lastConnectedMac ?: fallbackMac
-                if (!isTrackedCar(context, resolvedMac)) {
+                if (!isTrackedCar(context, lastConnectedMac)) {
                     return
                 }
                 val serviceIntent = Intent(context, TripService::class.java).apply {
                     this.action = TripService.ACTION_STOP_AND_SAVE
-                    putExtra(TripService.EXTRA_DEVICE_MAC, resolvedMac)
+                    putExtra(TripService.EXTRA_DEVICE_MAC, lastConnectedMac)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent)
                 } else {
                     context.startService(serviceIntent)
                 }
+                prefs.saveLastConnectedCarMac(null)
             }
             return
         }
@@ -136,6 +135,7 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             } else {
                 context.startService(serviceIntent)
             }
+            prefs.saveLastConnectedCarMac(null)
         }
     }
 
