@@ -156,8 +156,12 @@ class TripService : Service() {
 
     private fun startForegroundWithTypes(notification: Notification) {
         val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            val baseType = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
+                baseType
+            } else {
+                baseType or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            }
         } else {
             0
         }
