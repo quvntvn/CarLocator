@@ -36,6 +36,10 @@
     <string name="notif_channel_name">Événements voiture</string>
     <string name="notif_parked_title">📍 Voiture stationnée</string>
     <string name="notif_parked_body">Position enregistrée pour %1$s</string>
+    <string name="notif_connected_title">✅ Connexion réussie</string>
+    <string name="notif_connected_body">Connecté à %1$s</string>
+    <string name="fluid_cloud_channel_name">Alertes Fluid Cloud</string>
+    <string name="fluid_cloud_channel_description">Alertes heads-up imitant l’UI Fluid Cloud de Xiaomi.</string>
 
     <string name="default_car_name">Ma voiture (%1$s)</string>
     <string name="trip_default_car_name">Votre voiture</string>
