@@ -16,6 +16,7 @@ import androidx.core.app.ServiceCompat
 import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
+import com.quvntvn.carlocator.notifications.FluidCloudNotifier
 import com.quvntvn.carlocator.ui.MainActivity
 import com.quvntvn.carlocator.utils.GpsTracker
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +84,12 @@ class TripService : Service() {
         val wasActive = isTripActive
         if (!wasActive) {
             isTripActive = true
+            FluidCloudNotifier.notifyFluidCloudStyle(
+                context = this,
+                title = getString(R.string.notif_connected_title),
+                content = getString(R.string.notif_connected_body, resolvedName),
+                notificationId = NOTIFICATION_ID + 1
+            )
         }
         startForegroundWithTypes(createNotification(resolvedName))
 
@@ -231,33 +238,13 @@ class TripService : Service() {
     }
 
     private fun sendNotification(title: String, content: String, notificationId: Int) {
-        val channelId = "car_locator_events"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                getString(R.string.notif_channel_name),
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            manager.createNotificationChannel(channel)
-        }
-
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_myplaces)
-            .setContentTitle(title)
-            .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-
-        manager.notify(notificationId, notification)
+        FluidCloudNotifier.notifyFluidCloudStyle(
+            context = this,
+            title = title,
+            content = content,
+            notificationId = notificationId,
+            smallIconRes = android.R.drawable.ic_menu_myplaces
+        )
     }
 
     @Synchronized
