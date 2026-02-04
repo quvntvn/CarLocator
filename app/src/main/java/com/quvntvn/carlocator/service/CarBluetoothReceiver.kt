@@ -84,22 +84,27 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             if (action != BluetoothDevice.ACTION_ACL_CONNECTED && connectionState != BluetoothProfile.STATE_CONNECTED) {
                 return
             }
-            if (!hasBluetoothConnectPermission || device?.address == null) {
+            val resolvedDevice = if (hasBluetoothConnectPermission) {
+                device ?: findConnectedTrackedDevice(context)
+            } else {
+                device
+            }
+            if (!hasBluetoothConnectPermission || resolvedDevice?.address == null) {
                 return
             }
-            if (!isTrackedCar(context, device.address)) {
+            if (!isTrackedCar(context, resolvedDevice.address)) {
                 return
             }
-            prefs.saveLastConnectedCarMac(device.address)
+            prefs.saveLastConnectedCarMac(resolvedDevice.address)
             // Démarrer le service de trajet (Notif Puce Verte)
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
                 this.action = TripService.ACTION_START
                 putExtra(
                     TripService.EXTRA_DEVICE_NAME,
-                    device.name ?: context.getString(R.string.trip_default_car_name)
+                    resolvedDevice.name ?: context.getString(R.string.trip_default_car_name)
                 )
-                putExtra(TripService.EXTRA_DEVICE_MAC, device.address)
+                putExtra(TripService.EXTRA_DEVICE_MAC, resolvedDevice.address)
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -117,18 +122,22 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             ) {
                 return
             }
-            if (!hasBluetoothConnectPermission || device?.address == null) {
+            val resolvedMac = when {
+                device?.address != null && isTrackedCar(context, device.address) -> device.address
+                else -> prefs.getLastConnectedCarMac()
+            }
+            if (resolvedMac.isNullOrBlank()) {
                 return
             }
-            if (!isTrackedCar(context, device.address)) {
+            if (!isTrackedCar(context, resolvedMac)) {
                 return
             }
-            prefs.saveLastConnectedCarMac(device.address)
+            prefs.saveLastConnectedCarMac(resolvedMac)
             // Ordonner au service de sauvegarder et de s'arrêter
             val serviceIntent = Intent(context, TripService::class.java).apply {
                 // 'this.action' refers to the Intent's action property
                 this.action = TripService.ACTION_STOP_AND_SAVE
-                putExtra(TripService.EXTRA_DEVICE_MAC, device.address)
+                putExtra(TripService.EXTRA_DEVICE_MAC, resolvedMac)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
@@ -146,5 +155,20 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         val db = AppDatabase.getInstance(context)
         val savedCars = db.carDao().getAllCarsOnce()
         return savedCars.any { it.macAddress.equals(macAddress, ignoreCase = true) }
+    }
+
+    private suspend fun findConnectedTrackedDevice(context: Context): BluetoothDevice? {
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            ?: return null
+        val connectedDevices = bluetoothManager.getConnectedDevices(BluetoothProfile.A2DP) +
+            bluetoothManager.getConnectedDevices(BluetoothProfile.HEADSET)
+        if (connectedDevices.isEmpty()) {
+            return null
+        }
+        val db = AppDatabase.getInstance(context)
+        val savedCars = db.carDao().getAllCarsOnce()
+        return connectedDevices.firstOrNull { device ->
+            savedCars.any { it.macAddress.equals(device.address, ignoreCase = true) }
+        }
     }
 }
