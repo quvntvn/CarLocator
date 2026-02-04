@@ -92,4 +92,5 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("io.github.d4viddf:hyperisland_kit:0.4.3")
 }
