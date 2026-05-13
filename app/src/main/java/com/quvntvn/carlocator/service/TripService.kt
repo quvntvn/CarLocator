@@ -18,6 +18,7 @@ import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
 import com.quvntvn.carlocator.ui.MainActivity
 import com.quvntvn.carlocator.utils.GpsTracker
+import com.quvntvn.carlocator.utils.HyperIslandHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +36,8 @@ class TripService : Service() {
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "trip_channel"
+        private const val CHANNEL_ID_HIDDEN = "trip_hidden_channel"
+        private const val CHANNEL_ID_PARKED = "car_parked_v2"
         @Volatile
         private var isTripActive = false
         private const val EVENT_DEDUP_WINDOW_MS = 2_000L
@@ -101,17 +104,22 @@ class TripService : Service() {
     }
 
     private fun createNotification(deviceName: String): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.trip_notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+        val prefs = PrefsManager(applicationContext)
+        val tripVisible = prefs.isTripNotifEnabled()
+        val hyperIslandWanted = prefs.isHyperIslandEnabled() && HyperIslandHelper.isAvailable()
+
+        ensureTripChannels()
+
+        // Choix du canal : Focus (HyperIsland) > visible LOW > caché MIN.
+        val targetChannelId = when {
+            tripVisible && hyperIslandWanted -> {
+                HyperIslandHelper.ensureFocusChannel(this, getString(R.string.trip_notification_channel_name))
+                HyperIslandHelper.FOCUS_CHANNEL_ID
+            }
+            tripVisible -> CHANNEL_ID
+            else -> CHANNEL_ID_HIDDEN
         }
 
-        // Intent pour ouvrir l'app si on clique sur la notif
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
@@ -119,39 +127,75 @@ class TripService : Service() {
             action = ACTION_STOP_AND_SAVE
         }
         val stopTripPendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            PendingIntent.getForegroundService(
-                this,
-                1,
-                stopTripIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            PendingIntent.getForegroundService(this, 1, stopTripIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         } else {
-            PendingIntent.getService(
-                this,
-                1,
-                stopTripIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            PendingIntent.getService(this, 1, stopTripIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.trip_notif_title, deviceName))
-            .setContentText(getString(R.string.trip_notif_body))
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Remplacez par votre icône de voiture
+        val titleText = if (tripVisible) {
+            getString(R.string.trip_notif_title, deviceName)
+        } else {
+            getString(R.string.trip_silent_title)
+        }
+        val bodyText = if (tripVisible) {
+            getString(R.string.trip_notif_body)
+        } else {
+            getString(R.string.trip_silent_body)
+        }
+
+        val builder = NotificationCompat.Builder(this, targetChannelId)
+            .setContentTitle(titleText)
+            .setContentText(bodyText)
+            .setSmallIcon(R.drawable.ic_notif_car)
             .setContentIntent(pendingIntent)
-            .setOngoing(true) // Rend la notif "non enlevable" par l'utilisateur (swipe)
+            .setOngoing(true)
             .setAutoCancel(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOnlyAlertOnce(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(
-                R.drawable.ic_launcher_foreground,
-                getString(R.string.trip_stop_action),
-                stopTripPendingIntent
-            )
-            .build()
+            .setPriority(if (tripVisible) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MIN)
+
+        if (tripVisible) {
+            builder.addAction(R.drawable.ic_notif_car, getString(R.string.trip_stop_action), stopTripPendingIntent)
+        }
+
+        if (tripVisible && hyperIslandWanted) {
+            HyperIslandHelper.applyFocusExtras(builder, titleText, bodyText, ongoing = true)
+        }
+
+        val notification = builder.build()
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
         return notification
+    }
+
+    private fun ensureTripChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.trip_notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+            )
+        }
+        if (manager.getNotificationChannel(CHANNEL_ID_HIDDEN) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID_HIDDEN,
+                    getString(R.string.trip_hidden_channel_name),
+                    NotificationManager.IMPORTANCE_MIN
+                ).apply {
+                    setSound(null, null)
+                    enableVibration(false)
+                    setShowBadge(false)
+                }
+            )
+        }
     }
 
     private fun startForegroundWithTypes(notification: Notification) {
@@ -175,7 +219,10 @@ class TripService : Service() {
                 channelId,
                 getString(R.string.parking_service_channel_name),
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+            }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
@@ -183,7 +230,8 @@ class TripService : Service() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle(getString(R.string.parking_service_notif_title))
             .setContentText(getString(R.string.parking_service_notif_body))
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notif_car)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
     }
@@ -231,16 +279,25 @@ class TripService : Service() {
     }
 
     private fun sendNotification(title: String, content: String, notificationId: Int) {
-        val channelId = "car_locator_events"
+        val prefs = PrefsManager(applicationContext)
+        if (!prefs.isParkedNotifEnabled()) {
+            return
+        }
+
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                getString(R.string.notif_channel_name),
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            manager.createNotificationChannel(channel)
+            if (manager.getNotificationChannel(CHANNEL_ID_PARKED) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID_PARKED,
+                    getString(R.string.notif_channel_name),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+                manager.createNotificationChannel(channel)
+            }
         }
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -248,16 +305,19 @@ class TripService : Service() {
         }
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_menu_myplaces)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID_PARKED)
+            .setSmallIcon(R.drawable.ic_notif_car)
             .setContentTitle(title)
             .setContentText(content)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .build()
 
-        manager.notify(notificationId, notification)
+        if (prefs.isHyperIslandEnabled()) {
+            HyperIslandHelper.applyFocusExtras(builder, title, content, ongoing = false)
+        }
+
+        manager.notify(notificationId, builder.build())
     }
 
     @Synchronized

@@ -57,6 +57,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.CarLocation
+import com.quvntvn.carlocator.utils.XiaomiHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -83,12 +84,18 @@ fun MainScreen() {
     var showTutorialDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showLocationDisclosureDialog by remember { mutableStateOf(false) }
+    var showManufacturerStepsDialog by remember { mutableStateOf(false) }
 
     val allCars by viewModel.cars.collectAsStateWithLifecycle()
     val selectedCar by viewModel.selectedCar.collectAsStateWithLifecycle()
     val connectedCarName by viewModel.connectedCarName.collectAsStateWithLifecycle()
     val isBatteryOptimized by viewModel.isBatteryOptimized.collectAsStateWithLifecycle()
     val isAppEnabled by viewModel.isAppEnabled.collectAsStateWithLifecycle()
+    val showManufacturerWarning by viewModel.showManufacturerWarning.collectAsStateWithLifecycle()
+    val autostartStatus by viewModel.autostartStatus.collectAsStateWithLifecycle()
+    val isTripNotifEnabled by viewModel.isTripNotifEnabled.collectAsStateWithLifecycle()
+    val isParkedNotifEnabled by viewModel.isParkedNotifEnabled.collectAsStateWithLifecycle()
+    val isHyperIslandEnabled by viewModel.isHyperIslandEnabled.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collect { event ->
@@ -167,6 +174,7 @@ fun MainScreen() {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshBatteryOptimizationState()
+                viewModel.refreshManufacturerStatus()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -283,6 +291,43 @@ fun MainScreen() {
                     }
                 }
             }
+
+            if (showManufacturerWarning) {
+                Spacer(modifier = Modifier.height(12.dp))
+                val isDenied = autostartStatus == XiaomiHelper.AutostartStatus.DENIED
+                val bannerColor = if (isDenied) ErrorRed else Color(0xFFFFA000)
+                val bannerTitle = stringResource(
+                    if (isDenied) R.string.xiaomi_autostart_denied_title
+                    else R.string.xiaomi_warning_title
+                )
+                val bannerBody = stringResource(
+                    if (isDenied) R.string.xiaomi_autostart_denied_body
+                    else R.string.xiaomi_warning_body
+                )
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = bannerColor.copy(alpha = 0.95f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { showManufacturerStepsDialog = true }
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Warning, contentDescription = null, tint = TextWhite)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = bannerTitle,
+                                color = TextWhite,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = bannerBody,
+                                color = TextWhite,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // --- PARTIE BASSE (GPS + INFO) ---
@@ -348,6 +393,13 @@ fun MainScreen() {
                 context = context,
                 isAppEnabled = isAppEnabled,
                 onAppEnabledChange = { enabled -> viewModel.setAppEnabled(enabled) },
+                isTripNotifEnabled = isTripNotifEnabled,
+                onTripNotifEnabledChange = { viewModel.setTripNotifEnabled(it) },
+                isParkedNotifEnabled = isParkedNotifEnabled,
+                onParkedNotifEnabledChange = { viewModel.setParkedNotifEnabled(it) },
+                isHyperIslandEnabled = isHyperIslandEnabled,
+                onHyperIslandEnabledChange = { viewModel.setHyperIslandEnabled(it) },
+                showHyperIslandToggle = XiaomiHelper.isXiaomi(),
                 onDismiss = { showSettingsDialog = false },
                 onShowTutorial = {
                     showSettingsDialog = false
@@ -361,6 +413,48 @@ fun MainScreen() {
                 viewModel.setFirstLaunchDone()
                 showTutorialDialog = false
             })
+        }
+
+        if (showManufacturerStepsDialog) {
+            AlertDialog(
+                onDismissRequest = { showManufacturerStepsDialog = false },
+                containerColor = DarkerSurface,
+                title = {
+                    Text(
+                        stringResource(R.string.xiaomi_warning_steps_title),
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.xiaomi_warning_steps_body),
+                        color = TextGrey,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (!XiaomiHelper.openAutostartSettings(context)) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.open_settings_error),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }) {
+                        Text(stringResource(R.string.xiaomi_warning_action), color = NeonBlue)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        viewModel.dismissManufacturerWarning()
+                        showManufacturerStepsDialog = false
+                    }) {
+                        Text(stringResource(R.string.xiaomi_warning_done), color = TextGrey)
+                    }
+                }
+            )
         }
 
         if (showLocationDisclosureDialog) {
@@ -569,28 +663,59 @@ fun SettingsDialog(
     context: Context,
     isAppEnabled: Boolean,
     onAppEnabledChange: (Boolean) -> Unit,
+    isTripNotifEnabled: Boolean,
+    onTripNotifEnabledChange: (Boolean) -> Unit,
+    isParkedNotifEnabled: Boolean,
+    onParkedNotifEnabledChange: (Boolean) -> Unit,
+    isHyperIslandEnabled: Boolean,
+    onHyperIslandEnabledChange: (Boolean) -> Unit,
+    showHyperIslandToggle: Boolean,
     onDismiss: () -> Unit,
     onShowTutorial: () -> Unit
 ) {
-    var isAppEnabledState by remember { mutableStateOf(isAppEnabled) }
-
-    LaunchedEffect(isAppEnabled) {
-        isAppEnabledState = isAppEnabled
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DarkerSurface,
         title = { Text(stringResource(R.string.settings_title), color = TextWhite, fontWeight = FontWeight.Bold) },
         text = {
-            Column {
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.enable_app), color = TextWhite, fontWeight = FontWeight.Bold)
-                        Text(stringResource(R.string.enable_app_desc), color = TextGrey, fontSize = 12.sp)
-                    }
-                    Switch(checked = isAppEnabledState, onCheckedChange = { isAppEnabledState = it; onAppEnabledChange(it) }, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack))
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                SettingsToggleRow(
+                    title = stringResource(R.string.enable_app),
+                    description = stringResource(R.string.enable_app_desc),
+                    checked = isAppEnabled,
+                    onCheckedChange = onAppEnabledChange
+                )
+
+                Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
+                Text(
+                    stringResource(R.string.settings_notifications_section),
+                    color = NeonBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                SettingsToggleRow(
+                    title = stringResource(R.string.settings_notif_trip),
+                    description = stringResource(R.string.settings_notif_trip_desc),
+                    checked = isTripNotifEnabled,
+                    onCheckedChange = onTripNotifEnabledChange
+                )
+                SettingsToggleRow(
+                    title = stringResource(R.string.settings_notif_parked),
+                    description = stringResource(R.string.settings_notif_parked_desc),
+                    checked = isParkedNotifEnabled,
+                    onCheckedChange = onParkedNotifEnabledChange
+                )
+                if (showHyperIslandToggle) {
+                    SettingsToggleRow(
+                        title = stringResource(R.string.settings_hyper_island),
+                        description = stringResource(R.string.settings_hyper_island_desc),
+                        checked = isHyperIslandEnabled,
+                        onCheckedChange = onHyperIslandEnabledChange
+                    )
                 }
+
                 Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
                 Text(stringResource(R.string.settings_system_section), color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
                 Button(
@@ -625,6 +750,30 @@ fun SettingsDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok), color = NeonBlue) } }
     )
+}
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(title, color = TextWhite, fontWeight = FontWeight.Bold)
+            Text(description, color = TextGrey, fontSize = 12.sp)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack)
+        )
+    }
 }
 
 @Composable

@@ -1,5 +1,6 @@
 package com.quvntvn.carlocator.service
 
+import android.companion.CompanionDeviceManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -26,12 +27,12 @@ class BootCompletedReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as? android.companion.CompanionDeviceManager
+                    val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as? CompanionDeviceManager
                     if (deviceManager != null) {
                         val cars = AppDatabase.getInstance(context).carDao().getAllCarsOnce()
                         cars.forEach { car ->
                             try {
-                                deviceManager.startObservingDevicePresence(car.macAddress)
+                                observeDevicePresence(deviceManager, car.macAddress)
                             } catch (e: Exception) {
                                 // Ignorer si déjà surveillé ou non disponible
                             }
@@ -43,5 +44,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun observeDevicePresence(deviceManager: CompanionDeviceManager, macAddress: String) {
+        deviceManager.startObservingDevicePresence(macAddress)
     }
 }

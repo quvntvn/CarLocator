@@ -26,6 +26,7 @@ import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.CarLocation
 import com.quvntvn.carlocator.data.PrefsManager
+import com.quvntvn.carlocator.utils.XiaomiHelper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,11 +59,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isAppEnabled = MutableStateFlow(prefsManager.isAppEnabled())
     val isAppEnabled: StateFlow<Boolean> = _isAppEnabled.asStateFlow()
 
+    private val _isTripNotifEnabled = MutableStateFlow(prefsManager.isTripNotifEnabled())
+    val isTripNotifEnabled: StateFlow<Boolean> = _isTripNotifEnabled.asStateFlow()
+
+    private val _isParkedNotifEnabled = MutableStateFlow(prefsManager.isParkedNotifEnabled())
+    val isParkedNotifEnabled: StateFlow<Boolean> = _isParkedNotifEnabled.asStateFlow()
+
+    private val _isHyperIslandEnabled = MutableStateFlow(prefsManager.isHyperIslandEnabled())
+    val isHyperIslandEnabled: StateFlow<Boolean> = _isHyperIslandEnabled.asStateFlow()
+
+    fun setTripNotifEnabled(enabled: Boolean) {
+        prefsManager.setTripNotifEnabled(enabled)
+        _isTripNotifEnabled.value = enabled
+    }
+
+    fun setParkedNotifEnabled(enabled: Boolean) {
+        prefsManager.setParkedNotifEnabled(enabled)
+        _isParkedNotifEnabled.value = enabled
+    }
+
+    fun setHyperIslandEnabled(enabled: Boolean) {
+        prefsManager.setHyperIslandEnabled(enabled)
+        _isHyperIslandEnabled.value = enabled
+    }
+
+    private val _autostartStatus = MutableStateFlow(XiaomiHelper.AutostartStatus.UNKNOWN)
+    val autostartStatus: StateFlow<XiaomiHelper.AutostartStatus> = _autostartStatus.asStateFlow()
+
+    private val _showManufacturerWarning = MutableStateFlow(false)
+    val showManufacturerWarning: StateFlow<Boolean> = _showManufacturerWarning.asStateFlow()
+
+    fun refreshManufacturerStatus() {
+        if (!XiaomiHelper.isXiaomi()) {
+            _autostartStatus.value = XiaomiHelper.AutostartStatus.UNKNOWN
+            _showManufacturerWarning.value = false
+            return
+        }
+        val status = XiaomiHelper.checkAutostartStatus(appContext)
+        _autostartStatus.value = status
+        _showManufacturerWarning.value = when (status) {
+            XiaomiHelper.AutostartStatus.GRANTED -> false
+            XiaomiHelper.AutostartStatus.DENIED -> true
+            XiaomiHelper.AutostartStatus.UNKNOWN -> !prefsManager.isManufacturerSetupDone()
+        }
+    }
+
+    fun dismissManufacturerWarning() {
+        prefsManager.setManufacturerSetupDone(true)
+        if (_autostartStatus.value != XiaomiHelper.AutostartStatus.DENIED) {
+            _showManufacturerWarning.value = false
+        }
+    }
+
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents = _uiEvents.asSharedFlow()
 
     init {
         refreshBatteryOptimizationState()
+        refreshManufacturerStatus()
         observeCars()
     }
 
@@ -181,7 +235,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
                     val deviceManager = appContext.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
-                    deviceManager.startObservingDevicePresence(normalizedMac)
+                    observeDevicePresence(deviceManager, normalizedMac)
                 } catch (e: Exception) {
                     // Ignorer si déjà surveillé
                 }
@@ -321,6 +375,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         adapter.getProfileProxy(appContext, listener, BluetoothProfile.A2DP)
         adapter.getProfileProxy(appContext, listener, BluetoothProfile.HEADSET)
+    }
+
+    /**
+     * Observe la présence du device. L'API moderne (ObservingDevicePresenceRequest, API 35) sera
+     * adoptée quand l'AGP du projet supportera correctement compileSdk 35.
+     */
+    @Suppress("DEPRECATION")
+    private fun observeDevicePresence(deviceManager: CompanionDeviceManager, macAddress: String) {
+        deviceManager.startObservingDevicePresence(macAddress)
     }
 
     private fun disassociateDevice(macAddress: String) {
