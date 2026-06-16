@@ -20,6 +20,17 @@ object HyperIslandHelper {
 
     const val FOCUS_CHANNEL_ID = "trip_focus_channel"
 
+    /**
+     * Extra système Android 16 (API 36) qui demande la promotion d'une notif ongoing en
+     * "Live Update" / "Promoted Ongoing". Clé publique stable :
+     * Notification.EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing".
+     * Référencée en littéral car compileSdk = 35 (la constante n'existe qu'à partir d'API 36).
+     */
+    private const val EXTRA_PROMOTED_ONGOING = "android.requestPromotedOngoing"
+
+    /** Disponibilité de l'API publique Live Updates (Android 16+ ; HyperOS 3.1 l'honore). */
+    fun supportsLiveUpdate(): Boolean = Build.VERSION.SDK_INT >= 36
+
     fun isAvailable(): Boolean = XiaomiHelper.isHyperOS()
 
     /**
@@ -78,6 +89,27 @@ object HyperIslandHelper {
             builder.addExtras(extras)
         } catch (e: Throwable) {
             // L'app ne doit jamais crasher à cause de ce hack — extras ignorés silencieusement.
+        }
+    }
+
+    /**
+     * Chemin MODERNE (Android 16+ / HyperOS 3.1+) : demande la promotion en Live Update via
+     * l'API publique Google. Contrairement à [applyFocusExtras], pas besoin d'être whitelisté
+     * par Xiaomi — fonctionne aussi sur Pixel, Samsung One UI 8, etc.
+     *
+     * Prérequis (déjà remplis par la notif de trajet) : ongoing, contentTitle non vide,
+     * canal non IMPORTANCE_MIN, pas de custom RemoteViews, pas de setColorized(true).
+     * Nécessite la permission POST_PROMOTED_NOTIFICATIONS dans le manifest.
+     * No-op sous API 36.
+     */
+    fun applyLiveUpdate(builder: NotificationCompat.Builder) {
+        if (!supportsLiveUpdate()) return
+        try {
+            builder.addExtras(Bundle().apply {
+                putBoolean(EXTRA_PROMOTED_ONGOING, true)
+            })
+        } catch (e: Throwable) {
+            // Amélioration cosmétique : ne jamais crasher si l'extra est rejeté.
         }
     }
 }

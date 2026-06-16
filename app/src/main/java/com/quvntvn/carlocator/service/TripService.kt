@@ -106,13 +106,17 @@ class TripService : Service() {
     private fun createNotification(deviceName: String): Notification {
         val prefs = PrefsManager(applicationContext)
         val tripVisible = prefs.isTripNotifEnabled()
-        val hyperIslandWanted = prefs.isHyperIslandEnabled() && HyperIslandHelper.isAvailable()
+        val islandEnabled = prefs.isHyperIslandEnabled()
+        // Chemin moderne : Live Update Android 16 (toutes marques, HyperOS 3.1+, sans whitelist Xiaomi).
+        val liveUpdateWanted = tripVisible && islandEnabled && HyperIslandHelper.supportsLiveUpdate()
+        // Chemin legacy : extras miui.focus.* pour HyperOS < 3.1 (nécessite whitelist Xiaomi).
+        val legacyFocusWanted = tripVisible && islandEnabled && HyperIslandHelper.isAvailable()
 
         ensureTripChannels()
 
-        // Choix du canal : Focus (HyperIsland) > visible LOW > caché MIN.
+        // Choix du canal : Focus (HyperIsland/Live Update) > visible LOW > caché MIN.
         val targetChannelId = when {
-            tripVisible && hyperIslandWanted -> {
+            tripVisible && (liveUpdateWanted || legacyFocusWanted) -> {
                 HyperIslandHelper.ensureFocusChannel(this, getString(R.string.trip_notification_channel_name))
                 HyperIslandHelper.FOCUS_CHANNEL_ID
             }
@@ -145,7 +149,7 @@ class TripService : Service() {
 
         val builder = NotificationCompat.Builder(this, targetChannelId)
             .setContentTitle(titleText)
-            .setContentText(bodyText)
+            //.setContentText(bodyText)
             .setSmallIcon(R.drawable.ic_notif_car)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -159,7 +163,12 @@ class TripService : Service() {
             builder.addAction(R.drawable.ic_notif_car, getString(R.string.trip_stop_action), stopTripPendingIntent)
         }
 
-        if (tripVisible && hyperIslandWanted) {
+        // Android 16+ : API publique (Pixel, Samsung, HyperOS 3.1…).
+        if (liveUpdateWanted) {
+            HyperIslandHelper.applyLiveUpdate(builder)
+        }
+        // Fallback HyperOS plus ancien : extras propriétaires miui.focus.*.
+        if (legacyFocusWanted) {
             HyperIslandHelper.applyFocusExtras(builder, titleText, bodyText, ongoing = true)
         }
 
