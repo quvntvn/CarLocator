@@ -22,8 +22,8 @@ android {
         applicationId = "com.quvntvn.carlocator"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 10
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY")
@@ -31,7 +31,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -87,7 +88,9 @@ dependencies {
     implementation(libs.androidx.annotation)
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.glance.appwidget)
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

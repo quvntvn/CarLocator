@@ -32,10 +32,18 @@
     <string name="enable_app_desc">Disable to stop everything</string>
     <string name="settings_system_section">System</string>
     <string name="settings_open_app_settings">Open app settings (Battery)</string>
+    <string name="settings_notifications_section">Notifications</string>
+    <string name="settings_notif_trip">Trip notification</string>
+    <string name="settings_notif_trip_desc">When disabled, detection keeps running silently in the background</string>
+    <string name="settings_notif_parked">Parked notification</string>
+    <string name="settings_notif_parked_desc">Alert when your car is saved at a parking spot</string>
+    <string name="settings_hyper_island">HyperIsland (Xiaomi)</string>
+    <string name="settings_hyper_island_desc">Experimental display in the camera dot area. May not work on all HyperOS versions.</string>
+    <string name="trip_hidden_channel_name">Trip detection (hidden)</string>
+    <string name="trip_silent_title">Car Locator active</string>
+    <string name="trip_silent_body">Background detection running</string>
 
     <string name="notif_channel_name">Car Events</string>
-    <string name="notif_connected_title">🟢 Connected to %1$s</string>
-    <string name="notif_connected_body">Have a safe trip!</string>
     <string name="notif_parked_title">📍 Car Parked</string>
     <string name="notif_parked_body">Location saved for %1$s</string>
 
@@ -44,6 +52,7 @@
     <string name="trip_notification_channel_name">Trip in progress</string>
     <string name="trip_notif_title">🟢 Connected to %1$s</string>
     <string name="trip_notif_body">Trip in progress... location ready to save.</string>
+    <string name="trip_stop_action">Stop trip</string>
 
     <string name="parking_service_notif_title">Saving car location</string>
     <string name="parking_service_notif_body">Your car\'s parking spot is being saved...</string>
@@ -78,4 +87,17 @@
     <string name="bt_feature_unavailable">Feature not available on this Android version.</string>
     <string name="open_settings_error">Unable to open settings.</string>
     <string name="error_unknown">Unknown error</string>
+
+    <string name="xiaomi_warning_title">Xiaomi / MIUI detected</string>
+    <string name="xiaomi_warning_body">For the app to detect your car in the background, you must manually enable Autostart and remove battery restrictions. Tap to open the settings.</string>
+    <string name="xiaomi_warning_action">Open Autostart settings</string>
+    <string name="xiaomi_warning_done">I have configured it</string>
+    <string name="xiaomi_warning_steps_title">Required steps</string>
+    <string name="xiaomi_warning_steps_body">1. Enable \"Autostart\" for Car Locator\n2. Battery saver: set to \"No restrictions\"\n3. In the Recents screen, lock the app (padlock icon 🔒)\n\nWithout these steps, MIUI/HyperOS will kill the app and block Bluetooth detection.</string>
+    <string name="xiaomi_autostart_denied_title">Autostart disabled — fix required</string>
+    <string name="xiaomi_autostart_denied_body">MIUI/HyperOS is blocking Car Locator from starting in the background. Tap to fix.</string>
+
+    <string name="location_disclosure_title">Background location access</string>
+    <string name="location_disclosure_body">CarLocator uses background location to automatically save your car’s position when Bluetooth disconnects. Your location data stays private and is stored only on this device.</string>
+    <string name="continue_label">Continue</string>
 </resources>

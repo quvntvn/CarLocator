@@ -1,21 +1,43 @@
 # Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Garder les numéros de ligne dans les stack traces (utile pour Crashlytics / Play Console).
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# -----------------------------------------------------------------------------
+# Reflection utilisée par XiaomiHelper.kt :
+#   - android.os.SystemProperties.get(String) → lecture ro.mi.os.version.name, ro.miui.ui.version.name
+#   - android.app.AppOpsManager.checkOpNoThrow(int, int, String) → vérif statut Autostart MIUI
+# Ces deux classes sont système (jamais minifiées chez nous), MAIS R8 peut détecter les
+# Class.forName / getMethod et complainer. On les whiteliste explicitement par sécurité.
+# -----------------------------------------------------------------------------
+-keep class android.os.SystemProperties {
+    public static java.lang.String get(java.lang.String);
+}
+-keep class android.app.AppOpsManager {
+    public int checkOpNoThrow(int, int, java.lang.String);
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# -----------------------------------------------------------------------------
+# Room : les libs Room embarquent leurs propres consumer rules, mais on whitelist
+# nos entités par sécurité (R8 peut être agressif sur les data classes).
+# -----------------------------------------------------------------------------
+-keep class com.quvntvn.carlocator.data.** { *; }
+
+# -----------------------------------------------------------------------------
+# Garder les sealed classes / enums utilisés depuis Compose (UiEvent, AutostartStatus).
+# Compose lit parfois ces classes par réflexion via les State holders.
+# -----------------------------------------------------------------------------
+-keepclassmembers enum * { *; }
+-keep class com.quvntvn.carlocator.ui.MainViewModel$UiEvent { *; }
+-keep class com.quvntvn.carlocator.ui.MainViewModel$UiEvent$* { *; }
+-keep class com.quvntvn.carlocator.utils.XiaomiHelper$AutostartStatus { *; }
+
+# -----------------------------------------------------------------------------
+# Services / Receivers déclarés dans le manifest — déjà gardés par AAPT mais
+# explicite pour éviter toute surprise.
+# -----------------------------------------------------------------------------
+-keep class com.quvntvn.carlocator.service.** { *; }
+-keep class com.quvntvn.carlocator.ui.MainActivity { *; }

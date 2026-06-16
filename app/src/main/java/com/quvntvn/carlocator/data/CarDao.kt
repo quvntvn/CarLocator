@@ -1,4 +1,4 @@
-package com.quvntvn.carlocator
+package com.quvntvn.carlocator.data
 
 import androidx.room.Dao
 import androidx.room.Delete
@@ -12,6 +12,9 @@ interface CarDao {
 
     @Query("SELECT * FROM car_location")
     fun getAllCars(): Flow<List<CarLocation>>
+
+    @Query("SELECT * FROM car_location")
+    suspend fun getAllCarsOnce(): List<CarLocation>
 
     @Query("SELECT * FROM car_location WHERE macAddress = :macAddress LIMIT 1")
     suspend fun getCarByMac(macAddress: String): CarLocation?
