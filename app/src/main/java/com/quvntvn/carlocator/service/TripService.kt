@@ -164,8 +164,9 @@ class TripService : Service() {
         }
 
         // Android 16+ : API publique (Pixel, Samsung, HyperOS 3.1…).
+        // Texte court = nom de la voiture, pour éviter le titre trop long dans la pastille.
         if (liveUpdateWanted) {
-            HyperIslandHelper.applyLiveUpdate(builder)
+            HyperIslandHelper.applyLiveUpdate(builder, shortText = deviceName)
         }
         // Fallback HyperOS plus ancien : extras propriétaires miui.focus.*.
         if (legacyFocusWanted) {
@@ -315,7 +316,7 @@ class TripService : Service() {
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID_PARKED)
-            .setSmallIcon(R.drawable.ic_notif_car)
+            .setSmallIcon(R.drawable.ic_notif_pin)
             .setContentTitle(title)
             .setContentText(content)
             .setPriority(NotificationCompat.PRIORITY_LOW)

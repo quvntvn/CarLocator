@@ -28,6 +28,19 @@ object HyperIslandHelper {
      */
     private const val EXTRA_PROMOTED_ONGOING = "android.requestPromotedOngoing"
 
+    /**
+     * Clé de l'extra "texte court" de la pastille (Notification.EXTRA_SHORT_CRITICAL_TEXT, API 36) :
+     * c'est le libellé bref affiché dans le chip de la status bar. Lue par réflexion sur l'appareil
+     * pour garantir la bonne valeur, avec repli sur le littéral connu si la constante est absente.
+     */
+    private val shortCriticalTextKey: String by lazy {
+        runCatching {
+            android.app.Notification::class.java
+                .getField("EXTRA_SHORT_CRITICAL_TEXT")
+                .get(null) as String
+        }.getOrDefault("android.shortCriticalText")
+    }
+
     /** Disponibilité de l'API publique Live Updates (Android 16+ ; HyperOS 3.1 l'honore). */
     fun supportsLiveUpdate(): Boolean = Build.VERSION.SDK_INT >= 36
 
@@ -102,11 +115,14 @@ object HyperIslandHelper {
      * Nécessite la permission POST_PROMOTED_NOTIFICATIONS dans le manifest.
      * No-op sous API 36.
      */
-    fun applyLiveUpdate(builder: NotificationCompat.Builder) {
+    fun applyLiveUpdate(builder: NotificationCompat.Builder, shortText: String? = null) {
         if (!supportsLiveUpdate()) return
         try {
             builder.addExtras(Bundle().apply {
                 putBoolean(EXTRA_PROMOTED_ONGOING, true)
+                if (!shortText.isNullOrBlank()) {
+                    putString(shortCriticalTextKey, shortText)
+                }
             })
         } catch (e: Throwable) {
             // Amélioration cosmétique : ne jamais crasher si l'extra est rejeté.
