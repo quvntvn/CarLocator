@@ -37,8 +37,12 @@
     <string name="settings_notif_trip_desc">When disabled, detection keeps running silently in the background</string>
     <string name="settings_notif_parked">Parked notification</string>
     <string name="settings_notif_parked_desc">Alert when your car is saved at a parking spot</string>
-    <string name="settings_hyper_island">HyperIsland (Xiaomi)</string>
-    <string name="settings_hyper_island_desc">Experimental display in the camera dot area. May not work on all HyperOS versions.</string>
+    <string name="settings_hyper_island">Live trip notification</string>
+    <string name="settings_hyper_island_desc">Show an ongoing notification with live speed during trips (status bar pill, lock screen). Works on Android 16+ (Pixel, Samsung, Xiaomi…).</string>
+    <string name="settings_speed_unit">Speed unit</string>
+    <string name="speed_unit_auto">Auto</string>
+    <string name="speed_unit_kmh">km/h</string>
+    <string name="speed_unit_mph">mph</string>
     <string name="trip_hidden_channel_name">Trip detection (hidden)</string>
     <string name="trip_silent_title">Car Locator active</string>
     <string name="trip_silent_body">Background detection running</string>

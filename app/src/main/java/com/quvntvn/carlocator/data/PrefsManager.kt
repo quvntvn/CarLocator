@@ -19,6 +19,7 @@ class PrefsManager(context: Context) {
         private const val KEY_NOTIF_TRIP_ENABLED = "notif_trip_enabled"
         private const val KEY_NOTIF_PARKED_ENABLED = "notif_parked_enabled"
         private const val KEY_HYPER_ISLAND_ENABLED = "hyper_island_enabled"
+        private const val KEY_SPEED_UNIT = "speed_unit"
     }
 
     fun isManufacturerSetupDone(): Boolean = prefs.getBoolean(KEY_MANUFACTURER_SETUP_DONE, false)
@@ -35,9 +36,14 @@ class PrefsManager(context: Context) {
     fun setParkedNotifEnabled(enabled: Boolean) =
         prefs.edit().putBoolean(KEY_NOTIF_PARKED_ENABLED, enabled).apply()
 
-    fun isHyperIslandEnabled(): Boolean = prefs.getBoolean(KEY_HYPER_ISLAND_ENABLED, false)
+    fun isHyperIslandEnabled(): Boolean = prefs.getBoolean(KEY_HYPER_ISLAND_ENABLED, true)
     fun setHyperIslandEnabled(enabled: Boolean) =
         prefs.edit().putBoolean(KEY_HYPER_ISLAND_ENABLED, enabled).apply()
+
+    // Unité de vitesse affichée dans la pastille : "auto" | "kmh" | "mph".
+    fun getSpeedUnit(): String = prefs.getString(KEY_SPEED_UNIT, "auto") ?: "auto"
+    fun setSpeedUnit(value: String) =
+        prefs.edit().putString(KEY_SPEED_UNIT, value).apply()
 
     fun isFirstLaunch(): Boolean = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
     fun setFirstLaunchDone() = prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()

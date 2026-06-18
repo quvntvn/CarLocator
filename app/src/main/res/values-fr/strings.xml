@@ -37,8 +37,12 @@
     <string name="settings_notif_trip_desc">Si désactivée, la détection continue silencieusement en arrière-plan</string>
     <string name="settings_notif_parked">Notification de stationnement</string>
     <string name="settings_notif_parked_desc">Alerte quand votre voiture est enregistrée à un emplacement</string>
-    <string name="settings_hyper_island">HyperIsland (Xiaomi)</string>
-    <string name="settings_hyper_island_desc">Affichage expérimental autour de la pastille caméra. Peut ne pas fonctionner sur toutes les versions HyperOS.</string>
+    <string name="settings_hyper_island">Notification de trajet en direct</string>
+    <string name="settings_hyper_island_desc">Affiche une notification avec la vitesse en direct pendant le trajet (pastille, écran verrouillé). Fonctionne sur Android 16+ (Pixel, Samsung, Xiaomi…).</string>
+    <string name="settings_speed_unit">Unité de vitesse</string>
+    <string name="speed_unit_auto">Auto</string>
+    <string name="speed_unit_kmh">km/h</string>
+    <string name="speed_unit_mph">mph</string>
     <string name="trip_hidden_channel_name">Détection trajet (masquée)</string>
     <string name="trip_silent_title">Car Locator actif</string>
     <string name="trip_silent_body">Détection en arrière-plan en cours</string>

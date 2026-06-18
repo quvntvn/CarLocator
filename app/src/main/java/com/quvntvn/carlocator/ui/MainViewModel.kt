@@ -68,6 +68,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isHyperIslandEnabled = MutableStateFlow(prefsManager.isHyperIslandEnabled())
     val isHyperIslandEnabled: StateFlow<Boolean> = _isHyperIslandEnabled.asStateFlow()
 
+    private val _speedUnit = MutableStateFlow(prefsManager.getSpeedUnit())
+    val speedUnit: StateFlow<String> = _speedUnit.asStateFlow()
+
     fun setTripNotifEnabled(enabled: Boolean) {
         prefsManager.setTripNotifEnabled(enabled)
         _isTripNotifEnabled.value = enabled
@@ -81,6 +84,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHyperIslandEnabled(enabled: Boolean) {
         prefsManager.setHyperIslandEnabled(enabled)
         _isHyperIslandEnabled.value = enabled
+    }
+
+    fun setSpeedUnit(value: String) {
+        prefsManager.setSpeedUnit(value)
+        _speedUnit.value = value
     }
 
     private val _autostartStatus = MutableStateFlow(XiaomiHelper.AutostartStatus.UNKNOWN)

@@ -57,6 +57,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.CarLocation
+import com.quvntvn.carlocator.utils.HyperIslandHelper
 import com.quvntvn.carlocator.utils.XiaomiHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -96,6 +97,7 @@ fun MainScreen() {
     val isTripNotifEnabled by viewModel.isTripNotifEnabled.collectAsStateWithLifecycle()
     val isParkedNotifEnabled by viewModel.isParkedNotifEnabled.collectAsStateWithLifecycle()
     val isHyperIslandEnabled by viewModel.isHyperIslandEnabled.collectAsStateWithLifecycle()
+    val speedUnit by viewModel.speedUnit.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collect { event ->
@@ -399,7 +401,9 @@ fun MainScreen() {
                 onParkedNotifEnabledChange = { viewModel.setParkedNotifEnabled(it) },
                 isHyperIslandEnabled = isHyperIslandEnabled,
                 onHyperIslandEnabledChange = { viewModel.setHyperIslandEnabled(it) },
-                showHyperIslandToggle = XiaomiHelper.isXiaomi(),
+                showHyperIslandToggle = HyperIslandHelper.supportsLiveUpdate() || XiaomiHelper.isXiaomi(),
+                speedUnit = speedUnit,
+                onSpeedUnitChange = { viewModel.setSpeedUnit(it) },
                 onDismiss = { showSettingsDialog = false },
                 onShowTutorial = {
                     showSettingsDialog = false
@@ -670,6 +674,8 @@ fun SettingsDialog(
     isHyperIslandEnabled: Boolean,
     onHyperIslandEnabledChange: (Boolean) -> Unit,
     showHyperIslandToggle: Boolean,
+    speedUnit: String,
+    onSpeedUnitChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onShowTutorial: () -> Unit
 ) {
@@ -714,6 +720,12 @@ fun SettingsDialog(
                         checked = isHyperIslandEnabled,
                         onCheckedChange = onHyperIslandEnabledChange
                     )
+                    if (isHyperIslandEnabled) {
+                        SettingsSpeedUnitRow(
+                            selected = speedUnit,
+                            onSelect = onSpeedUnitChange
+                        )
+                    }
                 }
 
                 Divider(color = TextGrey.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 12.dp))
@@ -773,6 +785,44 @@ private fun SettingsToggleRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = SurfaceBlack)
         )
+    }
+}
+
+@Composable
+private fun SettingsSpeedUnitRow(
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    val options = listOf(
+        "auto" to stringResource(R.string.speed_unit_auto),
+        "kmh" to stringResource(R.string.speed_unit_kmh),
+        "mph" to stringResource(R.string.speed_unit_mph)
+    )
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(stringResource(R.string.settings_speed_unit), color = TextWhite, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, label) ->
+                val isSelected = selected.equals(value, ignoreCase = true)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(
+                            color = if (isSelected) NeonBlue else SurfaceBlack,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable { onSelect(value) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        color = if (isSelected) SurfaceBlack else TextWhite,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
