@@ -1,5 +1,6 @@
 package com.quvntvn.carlocator.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,24 +8,35 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
 import com.quvntvn.carlocator.ui.MainActivity
 import com.quvntvn.carlocator.utils.GpsTracker
 import com.quvntvn.carlocator.utils.HyperIslandHelper
+import com.quvntvn.carlocator.utils.SpeedFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 class TripService : Service() {
 
@@ -38,6 +50,8 @@ class TripService : Service() {
         private const val CHANNEL_ID = "trip_channel"
         private const val CHANNEL_ID_HIDDEN = "trip_hidden_channel"
         private const val CHANNEL_ID_PARKED = "car_parked_v2"
+        // Rafraîchissement de la vitesse dans la pastille (~2x/s).
+        private const val SPEED_UPDATE_INTERVAL_MS = 500L
         @Volatile
         private var isTripActive = false
         private const val EVENT_DEDUP_WINDOW_MS = 2_000L
@@ -46,12 +60,30 @@ class TripService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private val fusedLocationClient: FusedLocationProviderClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
+    @Volatile
+    private var currentSpeedMs: Float? = null
+    @Volatile
+    private var tripDeviceName: String? = null
+    private var locationUpdatesActive = false
+
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val location = result.lastLocation ?: return
+            currentSpeedMs = if (location.hasSpeed()) location.speed else null
+            refreshTripNotification()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopLocationUpdates()
         serviceScope.coroutineContext.cancelChildren()
         isTripActive = false
     }
@@ -73,6 +105,7 @@ class TripService : Service() {
         }
 
         if (action == ACTION_STOP_AND_SAVE) {
+            stopLocationUpdates()
             startForegroundWithTypes(createParkingNotification())
             serviceScope.launch {
                 handleDisconnection(macAddress)
@@ -83,17 +116,24 @@ class TripService : Service() {
         // Récupérer le nom de la voiture passé par le Receiver
         val deviceName = intent?.getStringExtra(EXTRA_DEVICE_NAME)
         val resolvedName = deviceName ?: getString(R.string.trip_default_car_name)
+        tripDeviceName = resolvedName
         val wasActive = isTripActive
         if (!wasActive) {
             isTripActive = true
         }
         startForegroundWithTypes(createNotification(resolvedName))
 
+        // Vitesse en direct dans la pastille uniquement quand la feature est active.
+        if (shouldTrackSpeed(prefs)) {
+            startLocationUpdates()
+        }
+
         if (deviceName == null && macAddress != null) {
             serviceScope.launch {
                 val db = AppDatabase.getInstance(applicationContext)
                 val car = db.carDao().getCarByMac(macAddress)
                 if (car != null) {
+                    tripDeviceName = car.name
                     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, createNotification(car.name))
                 }
@@ -111,6 +151,11 @@ class TripService : Service() {
         val liveUpdateWanted = tripVisible && islandEnabled && HyperIslandHelper.supportsLiveUpdate()
         // Chemin legacy : extras miui.focus.* pour HyperOS < 3.1 (nécessite whitelist Xiaomi).
         val legacyFocusWanted = tripVisible && islandEnabled && HyperIslandHelper.isAvailable()
+
+        val speedUnit = SpeedFormatter.resolveUnit(
+            SpeedFormatter.Setting.fromPref(prefs.getSpeedUnit()),
+            Locale.getDefault()
+        )
 
         ensureTripChannels()
 
@@ -141,15 +186,16 @@ class TripService : Service() {
         } else {
             getString(R.string.trip_silent_title)
         }
-        val bodyText = if (tripVisible) {
-            getString(R.string.trip_notif_body)
-        } else {
-            getString(R.string.trip_silent_body)
+        // En direct : la vue déployée montre "42 km/h". Sinon le corps habituel.
+        val bodyText = when {
+            !tripVisible -> getString(R.string.trip_silent_body)
+            liveUpdateWanted -> SpeedFormatter.full(currentSpeedMs, speedUnit)
+            else -> getString(R.string.trip_notif_body)
         }
 
         val builder = NotificationCompat.Builder(this, targetChannelId)
             .setContentTitle(titleText)
-            //.setContentText(bodyText)
+            .setContentText(bodyText)
             .setSmallIcon(R.drawable.ic_notif_car)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -164,9 +210,9 @@ class TripService : Service() {
         }
 
         // Android 16+ : API publique (Pixel, Samsung, HyperOS 3.1…).
-        // Texte court = nom de la voiture, pour éviter le titre trop long dans la pastille.
+        // Texte court de la pastille = vitesse seule, cadrée à 3 chiffres.
         if (liveUpdateWanted) {
-            HyperIslandHelper.applyLiveUpdate(builder, shortText = deviceName)
+            HyperIslandHelper.applyLiveUpdate(builder, shortText = SpeedFormatter.pill(currentSpeedMs, speedUnit))
         }
         // Fallback HyperOS plus ancien : extras propriétaires miui.focus.*.
         if (legacyFocusWanted) {
@@ -176,6 +222,43 @@ class TripService : Service() {
         val notification = builder.build()
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
         return notification
+    }
+
+    /** Vrai quand la notif de trajet en direct (Live Update) est active : on suit alors la vitesse. */
+    private fun shouldTrackSpeed(prefs: PrefsManager): Boolean =
+        prefs.isTripNotifEnabled() && prefs.isHyperIslandEnabled() && HyperIslandHelper.supportsLiveUpdate()
+
+    private fun startLocationUpdates() {
+        if (locationUpdatesActive) return
+        val fineGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!fineGranted) return
+
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, SPEED_UPDATE_INTERVAL_MS)
+            .setMinUpdateIntervalMillis(SPEED_UPDATE_INTERVAL_MS)
+            .build()
+        try {
+            fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+            locationUpdatesActive = true
+        } catch (e: SecurityException) {
+            // Permission révoquée entre-temps : on reste sans vitesse, sans crasher.
+        }
+    }
+
+    private fun stopLocationUpdates() {
+        if (!locationUpdatesActive) return
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+        locationUpdatesActive = false
+        currentSpeedMs = null
+    }
+
+    private fun refreshTripNotification() {
+        if (!isTripActive) return
+        val name = tripDeviceName ?: getString(R.string.trip_default_car_name)
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID, createNotification(name))
     }
 
     private fun ensureTripChannels() {
