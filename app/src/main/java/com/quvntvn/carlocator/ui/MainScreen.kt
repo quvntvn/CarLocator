@@ -796,7 +796,8 @@ private fun SettingsSpeedUnitRow(
     val options = listOf(
         "auto" to stringResource(R.string.speed_unit_auto),
         "kmh" to stringResource(R.string.speed_unit_kmh),
-        "mph" to stringResource(R.string.speed_unit_mph)
+        "mph" to stringResource(R.string.speed_unit_mph),
+        "off" to stringResource(R.string.speed_unit_off)
     )
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(stringResource(R.string.settings_speed_unit), color = TextWhite, fontWeight = FontWeight.Bold)
