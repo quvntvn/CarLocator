@@ -7,9 +7,9 @@ import java.util.Locale
  */
 object SpeedFormatter {
 
-    /** Choix utilisateur stocké en préférence. */
+    /** Choix utilisateur stocké en préférence. OFF = vitesse masquée (icône seule). */
     enum class Setting {
-        AUTO, KMH, MPH;
+        AUTO, KMH, MPH, OFF;
 
         fun toPref(): String = name.lowercase(Locale.ROOT)
 
@@ -17,6 +17,7 @@ object SpeedFormatter {
             fun fromPref(value: String?): Setting = when (value?.lowercase(Locale.ROOT)) {
                 "kmh" -> KMH
                 "mph" -> MPH
+                "off" -> OFF
                 else -> AUTO
             }
         }
@@ -30,7 +31,7 @@ object SpeedFormatter {
 
     // Espace "figure" (U+2007) : même largeur qu'un chiffre -> pastille de largeur stable
     // quelle que soit la vitesse (1, 2 ou 3 chiffres).
-    private const val FIGURE_SPACE = ' '
+    private const val FIGURE_SPACE = ' '
 
     // Pays roulant en miles par heure.
     private val MPH_REGIONS = setOf("US", "GB", "MM", "LR")
@@ -38,6 +39,8 @@ object SpeedFormatter {
     fun resolveUnit(setting: Setting, locale: Locale): Unit = when (setting) {
         Setting.KMH -> Unit.KMH
         Setting.MPH -> Unit.MPH
+        // OFF : valeur sans objet (vitesse masquée), on renvoie km/h par défaut.
+        Setting.OFF -> Unit.KMH
         Setting.AUTO ->
             if (locale.country.uppercase(Locale.ROOT) in MPH_REGIONS) Unit.MPH else Unit.KMH
     }
@@ -51,9 +54,9 @@ object SpeedFormatter {
         return (ms * factor).toInt().coerceIn(0, 999)
     }
 
-    /** Nombre seul, cadré à 3 caractères (ex. "  0", " 42", "150") pour une pastille stable. */
+    /** Vitesse + unité, nombre cadré à 3 caractères (ex. "  0 km/h", " 42 km/h", "150 km/h"). */
     fun pill(speedMs: Float?, unit: Unit): String =
-        value(speedMs, unit).toString().padStart(3, FIGURE_SPACE)
+        "${value(speedMs, unit).toString().padStart(3, FIGURE_SPACE)} ${label(unit)}"
 
     /** Vitesse + unité pour la vue déployée (ex. "42 km/h"). */
     fun full(speedMs: Float?, unit: Unit): String =

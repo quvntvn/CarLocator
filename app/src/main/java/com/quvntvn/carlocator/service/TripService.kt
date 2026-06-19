@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -73,7 +74,11 @@ class TripService : Service() {
         override fun onLocationResult(result: LocationResult) {
             val location = result.lastLocation ?: return
             currentSpeedMs = if (location.hasSpeed()) location.speed else null
-            refreshTripNotification()
+            // Écran éteint / Always-On Display : on ne rafraîchit pas la pastille pour éviter
+            // qu'elle s'actualise en continu sur l'AOD. La maj reprend dès l'écran rallumé.
+            if (isScreenInteractive()) {
+                refreshTripNotification()
+            }
         }
     }
 
@@ -152,10 +157,9 @@ class TripService : Service() {
         // Chemin legacy : extras miui.focus.* pour HyperOS < 3.1 (nécessite whitelist Xiaomi).
         val legacyFocusWanted = tripVisible && islandEnabled && HyperIslandHelper.isAvailable()
 
-        val speedUnit = SpeedFormatter.resolveUnit(
-            SpeedFormatter.Setting.fromPref(prefs.getSpeedUnit()),
-            Locale.getDefault()
-        )
+        val speedSetting = SpeedFormatter.Setting.fromPref(prefs.getSpeedUnit())
+        val showSpeed = liveUpdateWanted && speedSetting != SpeedFormatter.Setting.OFF
+        val speedUnit = SpeedFormatter.resolveUnit(speedSetting, Locale.getDefault())
 
         ensureTripChannels()
 
@@ -189,7 +193,7 @@ class TripService : Service() {
         // En direct : la vue déployée montre "42 km/h". Sinon le corps habituel.
         val bodyText = when {
             !tripVisible -> getString(R.string.trip_silent_body)
-            liveUpdateWanted -> SpeedFormatter.full(currentSpeedMs, speedUnit)
+            showSpeed -> SpeedFormatter.full(currentSpeedMs, speedUnit)
             else -> getString(R.string.trip_notif_body)
         }
 
@@ -210,9 +214,12 @@ class TripService : Service() {
         }
 
         // Android 16+ : API publique (Pixel, Samsung, HyperOS 3.1…).
-        // Texte court de la pastille = vitesse seule, cadrée à 3 chiffres.
+        // Texte court = vitesse + unité ; option "Off" -> pas de texte (icône seule dans la pastille).
         if (liveUpdateWanted) {
-            HyperIslandHelper.applyLiveUpdate(builder, shortText = SpeedFormatter.pill(currentSpeedMs, speedUnit))
+            HyperIslandHelper.applyLiveUpdate(
+                builder,
+                shortText = if (showSpeed) SpeedFormatter.pill(currentSpeedMs, speedUnit) else null
+            )
         }
         // Fallback HyperOS plus ancien : extras propriétaires miui.focus.*.
         if (legacyFocusWanted) {
@@ -226,7 +233,14 @@ class TripService : Service() {
 
     /** Vrai quand la notif de trajet en direct (Live Update) est active : on suit alors la vitesse. */
     private fun shouldTrackSpeed(prefs: PrefsManager): Boolean =
-        prefs.isTripNotifEnabled() && prefs.isHyperIslandEnabled() && HyperIslandHelper.supportsLiveUpdate()
+        prefs.isTripNotifEnabled() && prefs.isHyperIslandEnabled() &&
+            HyperIslandHelper.supportsLiveUpdate() &&
+            SpeedFormatter.Setting.fromPref(prefs.getSpeedUnit()) != SpeedFormatter.Setting.OFF
+
+    private fun isScreenInteractive(): Boolean {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return powerManager.isInteractive
+    }
 
     private fun startLocationUpdates() {
         if (locationUpdatesActive) return
