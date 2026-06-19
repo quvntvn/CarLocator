@@ -35,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -53,6 +54,8 @@ class TripService : Service() {
         private const val CHANNEL_ID_PARKED = "car_parked_v2"
         // Rafraîchissement de la vitesse dans la pastille (~2x/s).
         private const val SPEED_UPDATE_INTERVAL_MS = 500L
+        // Durée d'affichage de la confirmation "📍 Garée" dans la pastille après sauvegarde.
+        private const val SAVED_PILL_DURATION_MS = 2_000L
         @Volatile
         private var isTripActive = false
         private const val EVENT_DEDUP_WINDOW_MS = 2_000L
@@ -337,10 +340,42 @@ class TripService : Service() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle(getString(R.string.parking_service_notif_title))
             .setContentText(getString(R.string.parking_service_notif_body))
-            .setSmallIcon(R.drawable.ic_notif_car)
+            .setSmallIcon(R.drawable.ic_notif_pin)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
+    }
+
+    /** Notification promue (pastille) "📍 Garée" affichée brièvement après la sauvegarde. */
+    private fun buildSavedPill(name: String): Notification {
+        val prefs = PrefsManager(applicationContext)
+        val promote = prefs.isTripNotifEnabled() && prefs.isHyperIslandEnabled() &&
+            HyperIslandHelper.supportsLiveUpdate()
+        ensureTripChannels()
+        val channelId = if (promote) {
+            HyperIslandHelper.ensureFocusChannel(this, getString(R.string.trip_notification_channel_name))
+            HyperIslandHelper.FOCUS_CHANNEL_ID
+        } else {
+            CHANNEL_ID
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+        )
+        val builder = NotificationCompat.Builder(this, channelId)
+            .setContentTitle(getString(R.string.notif_parked_title))
+            .setContentText(getString(R.string.notif_parked_body, name))
+            .setSmallIcon(R.drawable.ic_notif_pin)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+        if (promote) {
+            HyperIslandHelper.applyLiveUpdate(builder, shortText = getString(R.string.notif_parked_pill))
+        }
+        val notification = builder.build()
+        notification.flags = notification.flags or Notification.FLAG_ONGOING_EVENT
+        return notification
     }
 
     private suspend fun handleDisconnection(macAddress: String?) {
@@ -373,6 +408,11 @@ class TripService : Service() {
                 content = getString(R.string.notif_parked_body, car.name),
                 notificationId = car.macAddress.hashCode()
             )
+
+            // Confirmation brève "📍 Garée" dans la pastille, puis arrêt du service.
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, buildSavedPill(car.name))
+            delay(SAVED_PILL_DURATION_MS)
         }
 
         stopTripService()
