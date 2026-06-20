@@ -56,6 +56,8 @@ class TripService : Service() {
         private const val SPEED_UPDATE_INTERVAL_MS = 500L
         // Durée d'affichage de la confirmation "📍 Garée" dans la pastille après sauvegarde.
         private const val SAVED_PILL_DURATION_MS = 2_000L
+        // Indicateur "connecté" affiché dans la pastille quand la vitesse est masquée (option Off).
+        private const val CONNECTED_DOT = "🟢"
         @Volatile
         private var isTripActive = false
         private const val EVENT_DEDUP_WINDOW_MS = 2_000L
@@ -221,7 +223,8 @@ class TripService : Service() {
         if (liveUpdateWanted) {
             HyperIslandHelper.applyLiveUpdate(
                 builder,
-                shortText = if (showSpeed) SpeedFormatter.pill(currentSpeedMs, speedUnit) else null
+                // Vitesse affichée -> "42 km/h" ; option Off -> juste le point "connecté" 🟢.
+                shortText = if (showSpeed) SpeedFormatter.pill(currentSpeedMs, speedUnit) else CONNECTED_DOT
             )
         }
         // Fallback HyperOS plus ancien : extras propriétaires miui.focus.*.
