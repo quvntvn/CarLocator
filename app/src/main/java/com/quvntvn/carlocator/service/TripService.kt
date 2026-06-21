@@ -36,6 +36,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -60,6 +63,9 @@ class TripService : Service() {
         private const val CONNECTED_DOT = "🟢"
         @Volatile
         private var isTripActive = false
+        private val _isActive = MutableStateFlow(false)
+        /** État réactif du suivi de trajet, observé par l'UI (bouton « Reprendre le trajet »). */
+        val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
         private const val EVENT_DEDUP_WINDOW_MS = 2_000L
         private var lastEvent: TripEvent? = null
     }
@@ -96,6 +102,7 @@ class TripService : Service() {
         stopLocationUpdates()
         serviceScope.coroutineContext.cancelChildren()
         isTripActive = false
+        _isActive.value = false
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -131,6 +138,7 @@ class TripService : Service() {
         if (!wasActive) {
             isTripActive = true
         }
+        _isActive.value = true
         startForegroundWithTypes(createNotification(resolvedName))
 
         // Vitesse en direct dans la pastille uniquement quand la feature est active.
