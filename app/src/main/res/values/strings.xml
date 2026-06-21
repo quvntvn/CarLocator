@@ -46,6 +46,10 @@
     <string name="speed_unit_off">Off</string>
     <string name="notif_parked_pill">📍</string>
     <string name="resume_trip">Resume trip</string>
+    <string name="park_confirm_title">Save location?</string>
+    <string name="park_confirm_message">Your car\'s location will be set to your current position.</string>
+    <string name="park_confirm_action">📍 Park here</string>
+    <string name="cancel">Cancel</string>
     <string name="trip_hidden_channel_name">Trip detection (hidden)</string>
     <string name="trip_silent_title">Car Locator active</string>
     <string name="trip_silent_body">Background detection running</string>

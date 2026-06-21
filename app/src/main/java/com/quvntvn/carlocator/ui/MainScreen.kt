@@ -86,6 +86,7 @@ fun MainScreen() {
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showLocationDisclosureDialog by remember { mutableStateOf(false) }
     var showManufacturerStepsDialog by remember { mutableStateOf(false) }
+    var showParkConfirmDialog by remember { mutableStateOf(false) }
 
     val allCars by viewModel.cars.collectAsStateWithLifecycle()
     val selectedCar by viewModel.selectedCar.collectAsStateWithLifecycle()
@@ -360,8 +361,7 @@ fun MainScreen() {
                 onResumeClick = { viewModel.resumeTrip() },
                 onParkClick = {
                     if (selectedCar == null) showGarageDialog = true
-                    else if (connectedCarName != null) viewModel.parkConnectedCar()
-                    else viewModel.saveCurrentLocation(selectedCar!!)
+                    else showParkConfirmDialog = true
                 },
                 onNavigateClick = {
                     selectedCar?.let { car ->
@@ -377,6 +377,33 @@ fun MainScreen() {
         }
 
         // --- DIALOGUES ---
+        if (showParkConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showParkConfirmDialog = false },
+                containerColor = DarkerSurface,
+                title = { Text(stringResource(R.string.park_confirm_title), color = TextWhite, fontWeight = FontWeight.Bold) },
+                text = { Text(stringResource(R.string.park_confirm_message), color = TextGrey) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showParkConfirmDialog = false
+                            if (connectedCarName != null) viewModel.parkConnectedCar()
+                            else selectedCar?.let { viewModel.saveCurrentLocation(it) }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(stringResource(R.string.park_confirm_action), color = TextWhite)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showParkConfirmDialog = false }) {
+                        Text(stringResource(R.string.cancel), color = TextGrey)
+                    }
+                }
+            )
+        }
+
         if (showGarageDialog) {
             GarageDialog(
                 savedCars = allCars,

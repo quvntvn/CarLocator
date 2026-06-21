@@ -46,6 +46,10 @@
     <string name="speed_unit_off">Off</string>
     <string name="notif_parked_pill">📍</string>
     <string name="resume_trip">Reprendre le trajet</string>
+    <string name="park_confirm_title">Enregistrer la position ?</string>
+    <string name="park_confirm_message">La position actuelle sera enregistrée comme emplacement de votre voiture.</string>
+    <string name="park_confirm_action">📍 Me garer ici</string>
+    <string name="cancel">Annuler</string>
     <string name="trip_hidden_channel_name">Détection trajet (masquée)</string>
     <string name="trip_silent_title">Car Locator actif</string>
     <string name="trip_silent_body">Détection en arrière-plan en cours</string>
