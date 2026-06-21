@@ -90,6 +90,7 @@ fun MainScreen() {
     val allCars by viewModel.cars.collectAsStateWithLifecycle()
     val selectedCar by viewModel.selectedCar.collectAsStateWithLifecycle()
     val connectedCarName by viewModel.connectedCarName.collectAsStateWithLifecycle()
+    val canResumeTrip by viewModel.canResumeTrip.collectAsStateWithLifecycle()
     val isBatteryOptimized by viewModel.isBatteryOptimized.collectAsStateWithLifecycle()
     val isAppEnabled by viewModel.isAppEnabled.collectAsStateWithLifecycle()
     val showManufacturerWarning by viewModel.showManufacturerWarning.collectAsStateWithLifecycle()
@@ -355,8 +356,11 @@ fun MainScreen() {
             CarInfoCard(
                 car = selectedCar,
                 connectedCarName = connectedCarName,
+                canResumeTrip = canResumeTrip,
+                onResumeClick = { viewModel.resumeTrip() },
                 onParkClick = {
                     if (selectedCar == null) showGarageDialog = true
+                    else if (connectedCarName != null) viewModel.parkConnectedCar()
                     else viewModel.saveCurrentLocation(selectedCar!!)
                 },
                 onNavigateClick = {
@@ -518,11 +522,18 @@ fun TopMenuCard(onGarageClick: () -> Unit, onSettingsClick: () -> Unit) {
 }
 
 @Composable
-fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () -> Unit, onNavigateClick: () -> Unit) {
+fun CarInfoCard(
+    car: CarLocation?,
+    connectedCarName: String?,
+    canResumeTrip: Boolean,
+    onResumeClick: () -> Unit,
+    onParkClick: () -> Unit,
+    onNavigateClick: () -> Unit
+) {
     Surface(modifier = Modifier.shadow(16.dp, RoundedCornerShape(24.dp)), shape = RoundedCornerShape(24.dp), color = SurfaceBlack) {
         Column(modifier = Modifier.padding(24.dp)) {
+            val isConnected = connectedCarName != null && (car == null || connectedCarName == car.name)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val isConnected = connectedCarName != null && (car == null || connectedCarName == car.name)
                 val statusColor = if (isConnected) SuccessGreen else ErrorRed
                 val statusText = stringResource(if (isConnected) R.string.connected else R.string.disconnected)
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
@@ -546,6 +557,19 @@ fun CarInfoCard(car: CarLocation?, connectedCarName: String?, onParkClick: () ->
                 }
             } else { Text(stringResource(R.string.unknown_position), color = TextGrey, fontSize = 14.sp) }
             Spacer(modifier = Modifier.height(24.dp))
+            if (canResumeTrip && isConnected) {
+                Button(
+                    onClick = onResumeClick,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, null, tint = SurfaceBlack)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.resume_trip), color = SurfaceBlack, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             Row(modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = onParkClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceBlack), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, TextGrey.copy(alpha = 0.3f))) { Text(stringResource(R.string.park_here), color = TextWhite) }
                 Spacer(modifier = Modifier.width(12.dp))

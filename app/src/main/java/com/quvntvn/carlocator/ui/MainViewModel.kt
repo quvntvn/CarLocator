@@ -26,10 +26,12 @@ import com.quvntvn.carlocator.R
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.CarLocation
 import com.quvntvn.carlocator.data.PrefsManager
+import com.quvntvn.carlocator.service.TripService
 import com.quvntvn.carlocator.utils.XiaomiHelper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +54,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _connectedCarName = MutableStateFlow<String?>(null)
     val connectedCarName: StateFlow<String?> = _connectedCarName.asStateFlow()
+
+    private val _connectedCarMac = MutableStateFlow<String?>(null)
+
+    /** Vrai quand on est connecté à une voiture mais qu'aucun trajet n'est en cours (= garé). */
+    val canResumeTrip: StateFlow<Boolean> =
+        combine(_connectedCarName, TripService.isActive) { name, active ->
+            name != null && !active
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val _isBatteryOptimized = MutableStateFlow(false)
     val isBatteryOptimized: StateFlow<Boolean> = _isBatteryOptimized.asStateFlow()
@@ -327,10 +337,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             (action != BluetoothDevice.ACTION_ACL_CONNECTED && connectionState == BluetoothProfile.STATE_DISCONNECTED)
         if (isConnectedEvent) {
             _connectedCarName.value = car.name
+            _connectedCarMac.value = car.macAddress
         } else if (isDisconnectedEvent) {
             if (_connectedCarName.value == car.name) {
                 _connectedCarName.value = null
+                _connectedCarMac.value = null
             }
+        }
+    }
+
+    /** Relance le suivi de trajet pour la voiture actuellement connectée. */
+    fun resumeTrip() {
+        val mac = _connectedCarMac.value ?: return
+        sendTripServiceIntent(TripService.ACTION_START, mac, _connectedCarName.value)
+    }
+
+    /** Enregistre l'emplacement ET arrête le trajet en cours (voiture connectée). */
+    fun parkConnectedCar() {
+        val mac = _connectedCarMac.value ?: return
+        sendTripServiceIntent(TripService.ACTION_STOP_AND_SAVE, mac, null)
+    }
+
+    private fun sendTripServiceIntent(action: String, mac: String, name: String?) {
+        val intent = Intent(appContext, TripService::class.java).apply {
+            this.action = action
+            putExtra(TripService.EXTRA_DEVICE_MAC, mac)
+            if (name != null) putExtra(TripService.EXTRA_DEVICE_NAME, name)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            appContext.startForegroundService(intent)
+        } else {
+            appContext.startService(intent)
         }
     }
 
@@ -366,15 +403,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                 val connectedDevices = proxy.connectedDevices
                 var foundName: String? = null
+                var foundMac: String? = null
                 for (device in connectedDevices) {
                     val car = savedCars.find { it.macAddress.equals(device.address, ignoreCase = true) }
                     if (car != null) {
                         foundName = car.name
+                        foundMac = car.macAddress
                         break
                     }
                 }
                 if (foundName != null) {
                     _connectedCarName.value = foundName
+                    _connectedCarMac.value = foundMac
                 }
                 adapter.closeProfileProxy(profile, proxy)
             }
