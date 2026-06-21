@@ -320,17 +320,32 @@ class TripService : Service() {
     }
 
     private fun startForegroundWithTypes(notification: Notification) {
-        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val baseType = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
-                baseType
-            } else {
-                baseType or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            }
-        } else {
-            0
+        val serviceType = resolveForegroundServiceType()
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, serviceType)
+        } catch (e: Exception) {
+            // Android 14+/16 lève une SecurityException si une permission de type FGS manque
+            // (ex. localisation non accordée au démarrage). On dégrade proprement, sans crasher.
+            stopSelf()
         }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, serviceType)
+    }
+
+    /** Ne déclare que les types de service de premier plan dont la permission est réellement accordée. */
+    private fun resolveForegroundServiceType(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+        var type = 0
+        val locationGranted =
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (locationGranted) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        }
+        val connectedDeviceGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT != Build.VERSION_CODES.R && connectedDeviceGranted) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        }
+        return type
     }
 
     private fun createParkingNotification(): Notification {
