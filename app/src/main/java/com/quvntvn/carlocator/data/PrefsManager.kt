@@ -41,7 +41,7 @@ class PrefsManager(context: Context) {
         prefs.edit().putBoolean(KEY_HYPER_ISLAND_ENABLED, enabled).apply()
 
     // Unité de vitesse affichée dans la pastille : "auto" | "kmh" | "mph".
-    fun getSpeedUnit(): String = prefs.getString(KEY_SPEED_UNIT, "auto") ?: "auto"
+    fun getSpeedUnit(): String = prefs.getString(KEY_SPEED_UNIT, "off") ?: "off"
     fun setSpeedUnit(value: String) =
         prefs.edit().putString(KEY_SPEED_UNIT, value).apply()
 
