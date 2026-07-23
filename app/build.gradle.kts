@@ -90,7 +90,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.glance.appwidget)
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
