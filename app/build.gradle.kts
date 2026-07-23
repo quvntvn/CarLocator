@@ -22,8 +22,8 @@ android {
         applicationId = "com.quvntvn.carlocator"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.2.3"
+        versionCode = 14
+        versionName = "1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY")
