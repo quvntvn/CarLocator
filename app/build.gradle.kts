@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.quvntvn.carlocator"
-    compileSdk = 35
+    compileSdk = 36
 
     val localProperties = Properties()
     val localPropertiesFile = project.rootProject.file("local.properties")
@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.quvntvn.carlocator"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 13
         versionName = "1.2.3"
 
