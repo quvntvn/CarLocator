@@ -3,6 +3,20 @@
 Branche : `chore/target-sdk-36` — obligation Play Store : toute nouvelle version
 publiée après le **31 août 2026** doit cibler l'API 36.
 
+> **État de la branche.** 9 commits vs `main` : **7** pour la migration + **2 correctifs
+> postérieurs** — `86180c0` (garde `startObservingDevicePresence` en API 31/S) et `40d80a1`
+> (traductions FR).
+>
+> **Vérification d'intégrité** : `git diff main HEAD --stat` doit lister **8 fichiers** (le diff
+> porte sur les *commits*). Ne **pas** utiliser `git diff main --stat`, qui inclut le *working tree*
+> et peut afficher du bruit local non commité (ex. `.idea/deploymentTargetSelector.xml`).
+>
+> **Une seule permission ajoutée au manifest** : `REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND`.
+> `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE` **n'a jamais été déclarée** (ni committée nulle part) →
+> le chemin d'observation CDM (`startObservingDevicePresence` / `MyCompanionDeviceService`) reste
+> **inerte** → **comportement runtime identique à la 1.2.3**. La permission ajoutée ne fait que
+> légitimer un `startForegroundService()` déjà existant ; elle n'active aucun nouveau chemin.
+
 ## 1. Diff des versions
 
 ### Modifié
@@ -49,10 +63,14 @@ targetSdkVersion:'36'
 
 Chaque point = une chose à valider à la main, dans l'ordre de risque décroissant.
 
-### 2.1 Démarrage du service de trajet en arrière-plan — **risque le plus élevé**
-`CarBluetoothReceiver` et `MyCompanionDeviceService` appellent `startForegroundService()`
-alors que l'app est en arrière-plan ; la permission d'exemption Companion, jusqu'ici
-absente, est désormais déclarée — à vérifier que le flux marche toujours, et mieux.
+### 2.1 Démarrage du service de trajet en arrière-plan — **aucun changement de comportement**
+`CarBluetoothReceiver` appelle `startForegroundService()` alors que l'app est en arrière-plan ;
+la permission d'exemption Companion `START_FOREGROUND_SERVICES_FROM_BACKGROUND`, jusqu'ici absente,
+est désormais déclarée. Elle **légitime un appel déjà existant**, elle n'ouvre aucun nouveau chemin.
+`MyCompanionDeviceService` appellerait aussi `startForegroundService()`, mais il **n'est jamais
+invoqué** (observation CDM inerte — cf. l'encadré en tête). Le seul déclencheur runtime reste le
+broadcast Bluetooth, exactement comme en 1.2.3 → **aucune validation en conduisant n'est requise
+pour la 1.2.4.**
 
 ### 2.2 Quotas d'exécution des jobs (Android 16)
 `SafetyNetWorker` (périodique 15 min) est soumis à des quotas resserrés selon l'*app
@@ -85,6 +103,11 @@ Aucune régression attendue : `POST_PROMOTED_NOTIFICATIONS` était déjà décla
 rendre les constantes officiellement disponibles.
 
 ## 3. Checklist de test manuel
+
+**La 1.2.4 est identique à la 1.2.3 côté logique applicative** (aucun `.kt` de flux modifié, CDM
+inerte). La série A (conduite) ci-dessous n'est donc **pas un bloquant de publication** — ce sont
+des smoke tests optionnels. Les seules vérifications réellement **nouvelles** tiennent au niveau
+*config API 36* : grand écran (série B, §2.3) et barre d'état sur Android ≤ 14 (C1, §2.5).
 
 Signature requise pour installer : les APK release produits ici sont **non signés**
 (aucun `signingConfig` dans Gradle) — passer par Android Studio pour un build signé.
@@ -131,18 +154,51 @@ Signature requise pour installer : les APK release produits ici sont **non sign�
 | D2 | Refuser la localisation en arrière-plan | L'app ne crashe pas, message clair | ☐ |
 | D3 | Révoquer BLUETOOTH_CONNECT en cours d'usage | Pas de `SecurityException` | ☐ |
 
-## 4. Point ouvert
+## 4. État du lint
 
-`./gradlew lint` remonte **11 erreurs**, toutes **préexistantes** : nombre et contenu
-identiques sur `main` avec AGP 8.4.0 / compileSdk 35, et inchangés après le passage à
-l'API 36. Elles ne sont donc pas causées par cette migration et n'ont pas été traitées
-ici (aucune ligne de base ni suppression lint n'a été ajoutée).
+Avant intervention : `./gradlew lint` remontait **11 erreurs**, toutes préexistantes (identiques
+sur `main` en AGP 8.4.0 / compileSdk 35, inchangées par la migration). Deux commits postérieurs en
+ont traité une partie **sans baseline ni suppression** :
 
-- 6 × `MissingPermission` — dont 2 signalant l'absence réelle de
-  `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE`, requise par
-  `startObservingDevicePresence()` (`BootCompletedReceiver:51`, `MainViewModel:434`)
-- 2 × `NewApi` — `startObservingDevicePresence()` exige l'API 31 alors que `minSdk` = 24
-- 3 × `MissingTranslation` — `location_disclosure_title`, `location_disclosure_body`,
-  `continue_label` absentes de `values-fr`
+- `40d80a1` (traductions FR) → efface les **3 `MissingTranslation`**.
+- `86180c0` (garde `>= S`) → corrige le **crash runtime** `NoSuchMethodError` sur Android 8–11 (le
+  garde côté appelant empêche l'appel sur API 26–30). ⚠️ **Ne réduit pas le lint** : les 2 `NewApi`
+  persistent car l'appel `startObservingDevicePresence` est dans le helper privé `observeDevicePresence`
+  sans garde *inline* — lint ne trace pas le garde de l'appelant à travers la frontière de méthode.
+  Faux positif lint, pas un bug ; **non supprimé**.
 
-À traiter dans un lot séparé.
+Après ces deux commits : **8 erreurs** restantes (`./gradlew lintDebug`, vérifié) :
+
+| id | n | emplacements | nature |
+|---|---|---|---|
+| `MissingPermission` | 4 | `CarBluetoothReceiver:163`, `:164`, `GpsTracker:55`, `MainViewModel:186` | appels BT/GPS sans check visible → `SecurityException` possible si la permission est révoquée après coup. **Les seules pouvant crasher un vrai utilisateur.** |
+| `MissingPermission` | 2 | `BootCompletedReceiver:53`, `MainViewModel:435` | absence assumée de `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE` → observation CDM inerte (voulu jusqu'en 1.2.5) |
+| `NewApi` | 2 | `BootCompletedReceiver:53`, `MainViewModel:435` | `startObservingDevicePresence` = API 31 ; garde inline manquant dans le helper (runtime déjà corrigé par `86180c0`) |
+
+Aucune de ces 8 n'a été corrigée dans ce lot (contrainte : pas de baseline, pas de `@Suppress`, pas
+de `lint.xml`).
+
+## 5. Prérequis 1.2.5 — activation du chemin CDM
+
+Le chemin d'observation CDM est **volontairement laissé inerte en 1.2.4**. L'activer (ajouter
+`REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE`) branche `MyCompanionDeviceService`, qui devient alors un
+**second déclencheur** de `TripService` en parallèle de `CarBluetoothReceiver`. Deux corrections de
+code doivent **précéder** cet ajout, sinon deux régressions apparaissent :
+
+1. **Normaliser le MAC en majuscules** en tête de `TripService.onStartCommand`. CDM émet le MAC en
+   **minuscules** (`MacAddress.toString()`), le broadcast BT en **majuscules** (`BluetoothDevice.address`).
+   Sans normalisation : (a) le dédoublonnage `shouldProcessEvent` (comparaison sensible à la casse)
+   échoue → double déclenchement ; (b) le lookup `getCarByMac` échoue → nom générique au lieu du nom
+   de la voiture.
+2. **Retirer `ACTION_STOP_AND_SAVE` du chemin CDM** (`onDeviceDisappeared`). La latence de détection
+   d'absence CDM peut atteindre plusieurs minutes ; une sauvegarde déclenchée tardivement enregistre
+   la position **courante** de l'utilisateur (loin de la voiture) et **écrase la vraie position de
+   stationnement**. CDM ne doit servir qu'au `START` ; le broadcast BT garde seul la sauvegarde.
+
+Ne **pas** filtrer via `isTripActive` : HyperOS tue le service agressivement, donc le flag peut être
+`false` en plein trajet légitime → sauvegarde manquée.
+
+Ordre : (1) normalisation MAC, (2) retrait `STOP_AND_SAVE` CDM, (3) **puis seulement** ajout de la
+permission `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE` — c'est un **premier ajout**, pas une
+réintroduction (elle n'a jamais été committée). Validation sur plusieurs trajets réels avant
+publication. Branche dédiée `feat/cdm-presence`, après publication de la 1.2.4.
