@@ -106,4 +106,8 @@
     <string name="xiaomi_warning_steps_body">1. Activez « Autostart » pour Car Locator\n2. Économie batterie : choisir « Aucune restriction »\n3. Dans les apps récentes, verrouillez l\'app (icône cadenas 🔒)\n\nSans ces étapes, MIUI/HyperOS tuera l\'app et bloquera la détection Bluetooth.</string>
     <string name="xiaomi_autostart_denied_title">Autostart désactivé — correction requise</string>
     <string name="xiaomi_autostart_denied_body">MIUI/HyperOS empêche Car Locator de démarrer en arrière-plan. Appuyez pour corriger.</string>
+
+    <string name="location_disclosure_title">Accès à la localisation en arrière-plan</string>
+    <string name="location_disclosure_body">Car Locator utilise la localisation en arrière-plan pour enregistrer automatiquement la position de votre voiture lorsque le Bluetooth se déconnecte. Vos données de localisation restent privées et sont stockées uniquement sur cet appareil.</string>
+    <string name="continue_label">Continuer</string>
 </resources>
