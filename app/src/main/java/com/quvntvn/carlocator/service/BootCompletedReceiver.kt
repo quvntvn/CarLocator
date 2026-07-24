@@ -26,7 +26,9 @@ class BootCompletedReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // startObservingDevicePresence est API 31 (S) : le garde doit être S, pas O (26),
+                // sinon NoSuchMethodError (non attrapé par catch(Exception)) sur Android 8–11.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val deviceManager = context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as? CompanionDeviceManager
                     if (deviceManager != null) {
                         val cars = AppDatabase.getInstance(context).carDao().getAllCarsOnce()

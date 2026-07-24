@@ -250,7 +250,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             db.carDao().insertOrUpdateCar(newCar)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // startObservingDevicePresence est API 31 (S) : garde en S, pas O (26).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 try {
                     val deviceManager = appContext.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager
                     observeDevicePresence(deviceManager, normalizedMac)
