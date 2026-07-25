@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.quvntvn.carlocator.data.AppDatabase
 import com.quvntvn.carlocator.data.PrefsManager
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,12 @@ class BootCompletedReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * @RequiresApi porte la contrainte d'API 31 sur le helper lui-même : lint vérifie alors le
+     * garde de chaque appelant, au lieu de faire reposer la sûreté sur l'hypothèse que les
+     * appelants connus sont les seuls.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
     @Suppress("DEPRECATION")
     private fun observeDevicePresence(deviceManager: CompanionDeviceManager, macAddress: String) {
         deviceManager.startObservingDevicePresence(macAddress)

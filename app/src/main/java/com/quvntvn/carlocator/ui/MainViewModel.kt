@@ -430,6 +430,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Observe la présence du device. L'API moderne (ObservingDevicePresenceRequest, API 35) sera
      * adoptée quand l'AGP du projet supportera correctement compileSdk 35.
      */
+    @RequiresApi(Build.VERSION_CODES.S)
     @Suppress("DEPRECATION")
     private fun observeDevicePresence(deviceManager: CompanionDeviceManager, macAddress: String) {
         deviceManager.startObservingDevicePresence(macAddress)
