@@ -3,9 +3,9 @@
 Branche : `chore/target-sdk-36` — obligation Play Store : toute nouvelle version
 publiée après le **31 août 2026** doit cibler l'API 36.
 
-> **État de la branche.** 9 commits vs `main` : **7** pour la migration + **2 correctifs
-> postérieurs** — `86180c0` (garde `startObservingDevicePresence` en API 31/S) et `40d80a1`
-> (traductions FR).
+> **État de la branche.** 12 commits vs `main` : **7** pour la migration + **5 postérieurs** —
+> `86180c0` (garde `startObservingDevicePresence` en API 31/S), `40d80a1` (traductions FR),
+> `9baa8f9` (`@RequiresApi(S)` sur les helpers), et 2 mises à jour de ce document.
 >
 > **Vérification d'intégrité** : `git diff main HEAD --stat` doit lister **8 fichiers** (le diff
 > porte sur les *commits*). Ne **pas** utiliser `git diff main --stat`, qui inclut le *working tree*
@@ -156,27 +156,38 @@ Signature requise pour installer : les APK release produits ici sont **non sign�
 
 ## 4. État du lint
 
-Avant intervention : `./gradlew lint` remontait **11 erreurs**, toutes préexistantes (identiques
-sur `main` en AGP 8.4.0 / compileSdk 35, inchangées par la migration). Deux commits postérieurs en
-ont traité une partie **sans baseline ni suppression** :
+Trajectoire réelle : **11 → 8 → 6**, sans jamais recourir à une baseline, un `@Suppress` ou un
+`lint.xml`. Les 11 de départ étaient toutes **préexistantes** (identiques sur `main` en AGP 8.4.0 /
+compileSdk 35, inchangées par le passage à l'API 36).
 
-- `40d80a1` (traductions FR) → efface les **3 `MissingTranslation`**.
-- `86180c0` (garde `>= S`) → corrige le **crash runtime** `NoSuchMethodError` sur Android 8–11 (le
-  garde côté appelant empêche l'appel sur API 26–30). ⚠️ **Ne réduit pas le lint** : les 2 `NewApi`
-  persistent car l'appel `startObservingDevicePresence` est dans le helper privé `observeDevicePresence`
-  sans garde *inline* — lint ne trace pas le garde de l'appelant à travers la frontière de méthode.
-  Faux positif lint, pas un bug ; **non supprimé**.
+| Étape | Commit | Effet |
+|---|---|---|
+| 11 → 8 | `40d80a1` | traductions FR → efface les 3 `MissingTranslation` |
+| 11 → 8 | `86180c0` | garde `>= S` chez les appelants → corrige le **crash runtime** `NoSuchMethodError` sur Android 8–11, **mais ne réduit pas le lint** |
+| 8 → 6 | `9baa8f9` | `@RequiresApi(S)` sur les helpers → efface les 2 `NewApi` |
 
-Après ces deux commits : **8 erreurs** restantes (`./gradlew lintDebug`, vérifié) :
+### Pourquoi les 2 `NewApi` ont survécu à `86180c0` — la leçon réutilisable
 
-| id | n | emplacements | nature |
+Ce n'était **pas un faux positif**. Lint signalait un appel API 31 non protégé *à l'endroit où il se
+trouve* — dans le helper privé `observeDevicePresence` —, ce qui était exact. Le garde posé chez les
+appelants rendait le code sûr **à condition** que ces appelants soient les seuls : un invariant vrai
+au moment du commit, mais **non vérifiable par l'outil** et silencieusement cassé par le prochain
+appel ajouté.
+
+> **Règle générale.** Quand un appel dépasse le `minSdk`, la contrainte se pose sur la **déclaration**
+> (`@RequiresApi`), d'où elle se **propage aux appelants** — lint vérifie alors chaque garde, à chaque
+> compilation. Un garde chez l'appelant seul est une garantie *supposée*, pas *vérifiée*.
+>
+> C'est exactement la classe d'erreur du garde `O` (26) au lieu de `S` (31) qui a survécu **13 versions
+> publiées** : une hypothèse de version plausible, jamais confrontée à l'outil. Le symptôme (une erreur
+> lint qu'on est tenté de qualifier de bruit) était le seul signal disponible.
+
+### Les 6 restantes — aucune corrigée dans ce lot
+
+| n | id | emplacements | statut |
 |---|---|---|---|
-| `MissingPermission` | 4 | `CarBluetoothReceiver:163`, `:164`, `GpsTracker:55`, `MainViewModel:186` | appels BT/GPS sans check visible → `SecurityException` possible si la permission est révoquée après coup. **Les seules pouvant crasher un vrai utilisateur.** |
-| `MissingPermission` | 2 | `BootCompletedReceiver:53`, `MainViewModel:435` | absence assumée de `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE` → observation CDM inerte (voulu jusqu'en 1.2.5) |
-| `NewApi` | 2 | `BootCompletedReceiver:53`, `MainViewModel:435` | `startObservingDevicePresence` = API 31 ; garde inline manquant dans le helper (runtime déjà corrigé par `86180c0`) |
-
-Aucune de ces 8 n'a été corrigée dans ce lot (contrainte : pas de baseline, pas de `@Suppress`, pas
-de `lint.xml`).
+| 4 | `MissingPermission` | `CarBluetoothReceiver:163`, `:164`, `GpsTracker:55`, `MainViewModel:186` | **préexistantes**. Appels BT/GPS sans check visible → `SecurityException` si la permission est révoquée après coup dans les réglages système. **Les seules pouvant crasher un vrai utilisateur** → reportées en 1.2.5 |
+| 2 | `MissingPermission` | `BootCompletedReceiver:60`, `MainViewModel:436` | **absence assumée** de `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE`, jusqu'à la décision CDM (§5) |
 
 ## 5. Prérequis 1.2.5 — activation du chemin CDM
 
@@ -202,3 +213,39 @@ Ordre : (1) normalisation MAC, (2) retrait `STOP_AND_SAVE` CDM, (3) **puis seule
 permission `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE` — c'est un **premier ajout**, pas une
 réintroduction (elle n'a jamais été committée). Validation sur plusieurs trajets réels avant
 publication. Branche dédiée `feat/cdm-presence`, après publication de la 1.2.4.
+
+## 6. Ce qui se généralise
+
+Transposable à un autre projet Kotlin/Android qui doit passer à l'API 36.
+
+**Le bump AGP était le seul prérequis réel.** AGP 8.4.0 ne connaît pas compileSdk 36 ; une fois
+l'AGP à jour (8.13.2), le passage à l'API 36 **n'a rien cassé** : aucun `.kt` modifié, aucune
+nouvelle erreur lint (11 avant, 11 après, identiques). Kotlin, KSP, Room, WorkManager, Compose BOM
+et les libs Maps sont restés à leur version — les mettre à jour « pendant qu'on y est » aurait
+introduit des variables sans rapport avec l'objectif.
+
+**L'ordre compte, parce qu'il isole la vraie variable :**
+
+1. **AGP d'abord, seul.** Build vert avant de toucher au SDK. Si quelque chose casse ici, c'est
+   l'outillage — pas la cible API.
+2. **Puis `compileSdk` / `targetSdk` → 36, seuls.** Ce qui casse à cette étape est *causé par la
+   nouvelle cible*, et rien d'autre. Dans ce projet : rien.
+3. **Puis les correctifs conditionnels**, un commit par sujet, chacun justifiable
+   indépendamment — et surtout **séparés de la migration**. Les correctifs `86180c0`, `40d80a1` et
+   `9baa8f9` corrigent des bugs **préexistants** ; les mêler aux commits de migration aurait rendu
+   impossible de répondre à « qu'est-ce que l'API 36 a changé ? ».
+
+**Corollaires vérifiés sur ce projet :**
+
+- **Compter avant et après.** Le même chiffre de lint des deux côtés (11 → 11) est la preuve la plus
+  simple que la migration n'a rien introduit. Sans mesure initiale, cette affirmation n'est pas
+  démontrable.
+- **Ne pas nettoyer ce qu'on n'a pas vérifié.** Les 12 flags de `gradle.properties` ressemblaient à
+  des résidus ; vérification faite dans les jars AGP, **11 sur 12 sont vivants**, dont un qui change
+  le comportement de R8 en release. Un seul a été retiré.
+- **Une permission déclarée ≠ un chemin actif.** `REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE`
+  n'ayant jamais été déclarée, tout le chemin d'observation CDM est resté inerte pendant 13 versions
+  sans qu'aucun log, toast ou état d'UI ne le révèle (exception avalée par un `catch(Exception)`
+  muet). Vérifier qu'un chemin s'exécute, pas seulement qu'il est écrit.
+- **Vérifier l'intégrité d'une branche avec `git diff main HEAD --stat`** (les *commits*), jamais
+  `git diff main --stat` qui inclut le *working tree* et son bruit local.
